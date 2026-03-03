@@ -16,18 +16,18 @@ import { ChangePasswordDialog } from '@/components/change-password-dialog';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, initialized } = useAuthStore();
   const { logout } = useAuth();
   const [pwdDialogOpen, setPwdDialogOpen] = useState(false);
 
-  // 未登录时重定向到登录页
+  // 等待 auth store 从 localStorage 恢复完成后再判断，避免刷新页面时误跳转
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (initialized && !isAuthenticated) {
       router.push('/login');
     }
-  }, [isAuthenticated, router]);
+  }, [initialized, isAuthenticated, router]);
 
-  if (!isAuthenticated || !user) return null;
+  if (!initialized || !isAuthenticated || !user) return null;
 
   return (
     <SidebarProvider>

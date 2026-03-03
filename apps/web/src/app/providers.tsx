@@ -18,6 +18,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }));
 
   const initialize = useAuthStore((s) => s.initialize);
+  const initialized = useAuthStore((s) => s.initialized);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   useEffect(() => {
@@ -28,6 +29,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isAuthenticated) connectSocket();
   }, [isAuthenticated]);
+
+  // auth store 从 localStorage 恢复完成前不渲染子组件，
+  // 避免 DashboardLayout 在 store 尚未初始化时误判为未登录并跳转到登录页
+  if (!initialized) return null;
 
   return (
     <QueryClientProvider client={queryClient}>

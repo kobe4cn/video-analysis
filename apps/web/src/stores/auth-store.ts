@@ -10,6 +10,7 @@ interface User {
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
+  initialized: boolean;
   setUser: (user: User) => void;
   setTokens: (accessToken: string, refreshToken: string) => void;
   logout: () => void;
@@ -27,6 +28,7 @@ const ROLE_HIERARCHY: Record<string, number> = {
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isAuthenticated: false,
+  initialized: false,
 
   setUser: (user) => {
     localStorage.setItem('user', JSON.stringify(user));
@@ -54,10 +56,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (userStr && token) {
       try {
         const user = JSON.parse(userStr);
-        set({ user, isAuthenticated: true });
+        set({ user, isAuthenticated: true, initialized: true });
       } catch {
-        set({ user: null, isAuthenticated: false });
+        set({ user: null, isAuthenticated: false, initialized: true });
       }
+    } else {
+      set({ initialized: true });
     }
   },
 
