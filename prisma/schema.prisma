@@ -1,0 +1,202 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ========== 用户与权限 ==========
+
+enum Role {
+  ADMIN
+  OPERATOR
+  USER
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     @default(USER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  videos Video[]
+  tasks  Task[]
+  skills Skill[]
+}
+
+// ========== 模型管理 ==========
+
+model ModelProvider {
+  id        String   @id @default(cuid())
+  name      String
+  baseUrl   String
+  apiKey    String
+  isActive  Boolean  @default(true)
+  models    Model[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Model {
+  id          String        @id @default(cuid())
+  name        String
+  displayName String
+  providerId  String
+  provider    ModelProvider  @relation(fields: [providerId], references: [id])
+  isActive    Boolean       @default(true)
+  config      Json?
+  tasks       Task[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+// ========== OSS 存储管理 ==========
+
+model OssConfig {
+  id              String      @id @default(cuid())
+  name            String
+  provider        String      @default("aliyun")
+  region          String
+  accessKeyId     String
+  accessKeySecret String
+  buckets         OssBucket[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model OssBucket {
+  id          String    @id @default(cuid())
+  name        String
+  ossConfigId String
+  ossConfig   OssConfig @relation(fields: [ossConfigId], references: [id])
+  isDefault   Boolean   @default(false)
+  videos      Video[]
+  createdAt   DateTime  @default(now())
+}
+
+// ========== 视频管理 ==========
+
+model Video {
+  id         String      @id @default(cuid())
+  title      String
+  fileName   String
+  ossKey     String
+  ossUrl     String
+  fileSize   BigInt
+  duration   Int?
+  bucketId   String
+  bucket     OssBucket   @relation(fields: [bucketId], references: [id])
+  uploadedBy String
+  user       User        @relation(fields: [uploadedBy], references: [id])
+  taskVideos TaskVideo[]
+  reports    Report[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+// ========== 解析任务管理 ==========
+
+enum TaskStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  PARTIAL
+  FAILED
+}
+
+enum TaskVideoStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  name        String
+  status      TaskStatus @default(PENDING)
+  skillId     String
+  skill       Skill      @relation(fields: [skillId], references: [id])
+  modelId     String
+  model       Model      @relation(fields: [modelId], references: [id])
+  createdBy   String
+  user        User       @relation(fields: [createdBy], references: [id])
+  taskVideos  TaskVideo[]
+  progress    Int        @default(0)
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model TaskVideo {
+  id          String          @id @default(cuid())
+  taskId      String
+  task        Task            @relation(fields: [taskId], references: [id])
+  videoId     String
+  video       Video           @relation(fields: [videoId], references: [id])
+  status      TaskVideoStatus @default(PENDING)
+  reportId    String?         @unique
+  report      Report?         @relation(fields: [reportId], references: [id])
+  error       String?
+  startedAt   DateTime?
+  completedAt DateTime?
+}
+
+// ========== 报告与版本管理 ==========
+
+model Report {
+  id         String          @id @default(cuid())
+  videoId    String
+  video      Video           @relation(fields: [videoId], references: [id])
+  content    String
+  version    Int             @default(1)
+  versions   ReportVersion[]
+  taskVideo  TaskVideo?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+}
+
+model ReportVersion {
+  id        String   @id @default(cuid())
+  reportId  String
+  report    Report   @relation(fields: [reportId], references: [id])
+  version   Int
+  content   String
+  skillId   String?
+  modelId   String?
+  prompt    String?
+  createdAt DateTime @default(now())
+}
+
+// ========== Skills 管理 ==========
+
+model Skill {
+  id          String         @id @default(cuid())
+  name        String
+  description String?
+  content     String
+  version     Int            @default(1)
+  versions    SkillVersion[]
+  isActive    Boolean        @default(true)
+  createdBy   String
+  user        User           @relation(fields: [createdBy], references: [id])
+  tasks       Task[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model SkillVersion {
+  id        String   @id @default(cuid())
+  skillId   String
+  skill     Skill    @relation(fields: [skillId], references: [id])
+  version   Int
+  content   String
+  createdAt DateTime @default(now())
+}
