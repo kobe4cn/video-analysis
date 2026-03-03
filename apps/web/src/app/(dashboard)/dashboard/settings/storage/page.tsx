@@ -28,24 +28,25 @@ interface OssConfig {
   name: string;
   provider: string;
   accessKeyId: string;
-  accessKeySecret: string;
   region: string;
-  isActive: boolean;
+  bucketCount: number;
+  createdAt: string;
 }
 
 interface OssBucket {
   id: string;
   name: string;
   ossConfigId: string;
-  domain: string;
+  ossConfigName: string;
   isDefault: boolean;
-  isActive: boolean;
+  videoCount: number;
+  createdAt: string;
 }
 
 // ─── 表单初始值 ───
 
 const emptyConfigForm = { name: '', provider: '', accessKeyId: '', accessKeySecret: '', region: '' };
-const emptyBucketForm = { name: '', ossConfigId: '', domain: '', isDefault: false };
+const emptyBucketForm = { name: '', ossConfigId: '', isDefault: false };
 
 export default function StorageSettingsPage() {
   const queryClient = useQueryClient();
@@ -58,7 +59,6 @@ export default function StorageSettingsPage() {
 
   // ─── Bucket state ───
   const [bucketDialogOpen, setBucketDialogOpen] = useState(false);
-  const [editingBucket, setEditingBucket] = useState<OssBucket | null>(null);
   const [bucketForm, setBucketForm] = useState(emptyBucketForm);
   const [deleteBucketId, setDeleteBucketId] = useState<string | null>(null);
 
@@ -111,21 +111,10 @@ export default function StorageSettingsPage() {
   // ─── Bucket Mutations ───
 
   const createBucketMutation = useMutation({
-    mutationFn: (body: { name: string; ossConfigId: string; domain?: string; isDefault?: boolean }) =>
+    mutationFn: (body: { name: string; ossConfigId: string; isDefault?: boolean }) =>
       apiClient.post('/oss-buckets', body),
     onSuccess: () => {
       toast.success('Bucket 创建成功');
-      queryClient.invalidateQueries({ queryKey: ['oss-buckets'] });
-      closeBucketDialog();
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  const updateBucketMutation = useMutation({
-    mutationFn: ({ id, ...body }: { id: string } & Partial<{ name: string; ossConfigId: string; domain: string; isDefault: boolean; isActive: boolean }>) =>
-      apiClient.patch(`/oss-buckets/${id}`, body),
-    onSuccess: () => {
-      toast.success('Bucket 更新成功');
       queryClient.invalidateQueries({ queryKey: ['oss-buckets'] });
       closeBucketDialog();
     },
@@ -183,66 +172,28 @@ export default function StorageSettingsPage() {
     }
   }
 
-  function handleConfigToggle(config: OssConfig) {
-    updateConfigMutation.mutate({ id: config.id, isActive: !config.isActive });
-  }
-
   // ─── Bucket 辅助函数 ───
 
   function closeBucketDialog() {
     setBucketDialogOpen(false);
-    setEditingBucket(null);
     setBucketForm(emptyBucketForm);
   }
 
   function openCreateBucket() {
-    setEditingBucket(null);
     setBucketForm(emptyBucketForm);
     setBucketDialogOpen(true);
   }
 
-  function openEditBucket(bucket: OssBucket) {
-    setEditingBucket(bucket);
-    setBucketForm({
-      name: bucket.name,
-      ossConfigId: bucket.ossConfigId,
-      domain: bucket.domain || '',
-      isDefault: bucket.isDefault,
-    });
-    setBucketDialogOpen(true);
-  }
-
   function handleBucketSubmit() {
-    if (editingBucket) {
-      updateBucketMutation.mutate({
-        id: editingBucket.id,
-        name: bucketForm.name || undefined,
-        ossConfigId: bucketForm.ossConfigId || undefined,
-        domain: bucketForm.domain || undefined,
-        isDefault: bucketForm.isDefault,
-      });
-    } else {
-      createBucketMutation.mutate({
-        name: bucketForm.name,
-        ossConfigId: bucketForm.ossConfigId,
-        domain: bucketForm.domain || undefined,
-        isDefault: bucketForm.isDefault || undefined,
-      });
-    }
-  }
-
-  function handleBucketToggle(bucket: OssBucket) {
-    updateBucketMutation.mutate({ id: bucket.id, isActive: !bucket.isActive });
-  }
-
-  /** 根据 ossConfigId 查找对应配置的 provider 名称 */
-  function getConfigLabel(ossConfigId: string): string {
-    const config = ossConfigs?.find((c) => c.id === ossConfigId);
-    return config ? `${config.name} (${config.region})` : ossConfigId;
+    createBucketMutation.mutate({
+      name: bucketForm.name,
+      ossConfigId: bucketForm.ossConfigId,
+      isDefault: bucketForm.isDefault || undefined,
+    });
   }
 
   const configPending = createConfigMutation.isPending || updateConfigMutation.isPending;
-  const bucketPending = createBucketMutation.isPending || updateBucketMutation.isPending;
+  const bucketPending = createBucketMutation.isPending;
 
   return (
     <div className="space-y-8">
@@ -270,7 +221,7 @@ export default function StorageSettingsPage() {
                 <TableHead>Provider</TableHead>
                 <TableHead>Access Key ID</TableHead>
                 <TableHead>Region</TableHead>
-                <TableHead>状态</TableHead>
+                <TableHead>Bucket 数</TableHead>
                 <TableHead className="text-right">操作</TableHead>
               </TableRow>
             </TableHeader>
@@ -281,12 +232,7 @@ export default function StorageSettingsPage() {
                   <TableCell>{config.provider}</TableCell>
                   <TableCell className="font-mono text-xs">{config.accessKeyId}</TableCell>
                   <TableCell>{config.region}</TableCell>
-                  <TableCell>
-                    <Switch
-                      checked={config.isActive}
-                      onCheckedChange={() => handleConfigToggle(config)}
-                    />
-                  </TableCell>
+                  <TableCell>{config.bucketCount}</TableCell>
                   <TableCell className="text-right space-x-1">
                     <Button variant="ghost" size="sm" onClick={() => openEditConfig(config)}>
                       <Pencil className="h-4 w-4" />
@@ -331,9 +277,9 @@ export default function StorageSettingsPage() {
               <TableRow>
                 <TableHead>名称</TableHead>
                 <TableHead>OSS 配置</TableHead>
-                <TableHead>域名</TableHead>
                 <TableHead>默认</TableHead>
-                <TableHead>状态</TableHead>
+                <TableHead>视频数</TableHead>
+                <TableHead>创建时间</TableHead>
                 <TableHead className="text-right">操作</TableHead>
               </TableRow>
             </TableHeader>
@@ -342,9 +288,8 @@ export default function StorageSettingsPage() {
                 <TableRow key={bucket.id}>
                   <TableCell className="font-medium">{bucket.name}</TableCell>
                   <TableCell>
-                    <Badge variant="outline">{getConfigLabel(bucket.ossConfigId)}</Badge>
+                    <Badge variant="outline">{bucket.ossConfigName}</Badge>
                   </TableCell>
-                  <TableCell className="max-w-xs truncate">{bucket.domain || '-'}</TableCell>
                   <TableCell>
                     {bucket.isDefault ? (
                       <Badge>默认</Badge>
@@ -352,16 +297,9 @@ export default function StorageSettingsPage() {
                       <span className="text-muted-foreground">-</span>
                     )}
                   </TableCell>
-                  <TableCell>
-                    <Switch
-                      checked={bucket.isActive}
-                      onCheckedChange={() => handleBucketToggle(bucket)}
-                    />
-                  </TableCell>
-                  <TableCell className="text-right space-x-1">
-                    <Button variant="ghost" size="sm" onClick={() => openEditBucket(bucket)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
+                  <TableCell>{bucket.videoCount}</TableCell>
+                  <TableCell>{new Date(bucket.createdAt).toLocaleDateString('zh-CN')}</TableCell>
+                  <TableCell className="text-right">
                     <Button variant="ghost" size="sm" onClick={() => setDeleteBucketId(bucket.id)}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
@@ -461,7 +399,7 @@ export default function StorageSettingsPage() {
       <Dialog open={bucketDialogOpen} onOpenChange={(open) => { if (!open) closeBucketDialog(); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingBucket ? '编辑 Bucket' : '添加 Bucket'}</DialogTitle>
+            <DialogTitle>添加 Bucket</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
@@ -483,22 +421,13 @@ export default function StorageSettingsPage() {
                   <SelectValue placeholder="选择 OSS 配置" />
                 </SelectTrigger>
                 <SelectContent>
-                  {ossConfigs?.filter((c) => c.isActive).map((c) => (
+                  {ossConfigs?.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
-                      {c.provider} ({c.region})
+                      {c.name} - {c.provider} ({c.region})
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label>自定义域名 (可选)</Label>
-              <Input
-                value={bucketForm.domain}
-                onChange={(e) => setBucketForm({ ...bucketForm, domain: e.target.value })}
-                placeholder="https://cdn.example.com"
-                className="mt-1"
-              />
             </div>
             <div className="flex items-center gap-2">
               <Switch
@@ -515,7 +444,7 @@ export default function StorageSettingsPage() {
               onClick={handleBucketSubmit}
               disabled={
                 bucketPending ||
-                (!editingBucket && (!bucketForm.name || !bucketForm.ossConfigId))
+                !bucketForm.name || !bucketForm.ossConfigId
               }
             >
               {bucketPending ? '保存中...' : '保存'}
