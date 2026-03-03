@@ -25,6 +25,17 @@ jobs:
     outputs:
       image_tag: ${{ steps.meta.outputs.tag }}
     steps:
+      - name: Check required secrets
+        run: |
+          missing=""
+          [ -z "${{ secrets.ACR_REGISTRY }}" ] && missing="$missing ACR_REGISTRY"
+          [ -z "${{ secrets.ACR_USERNAME }}" ] && missing="$missing ACR_USERNAME"
+          [ -z "${{ secrets.ACR_PASSWORD }}" ] && missing="$missing ACR_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error::缺少必需的 Secrets:$missing — 请在 Settings → Secrets → Actions 中配置"
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
 
       - name: Set image tag
@@ -58,6 +69,13 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
+      - name: Check KUBE_CONFIG secret
+        run: |
+          if [ -z "${{ secrets.KUBE_CONFIG }}" ]; then
+            echo "::error::缺少 KUBE_CONFIG Secret — 请在 Settings → Secrets → Actions 中配置 ACK kubeconfig（base64 编码）"
+            exit 1
+          fi
+
       - name: Configure kubectl
         run: |
           mkdir -p $HOME/.kube
