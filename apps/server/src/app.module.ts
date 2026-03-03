@@ -27,6 +27,7 @@ import { join } from 'path';
     StorageModule,
     VideoModule,
     SkillModule,
+    ReportModule,
   ],
   providers: [
     // 全局启用 JWT 认证，未标注 @Public() 的端点默认需要登录
