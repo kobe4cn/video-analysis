@@ -107,7 +107,10 @@ export class OssBucketService {
           data: { isDefault: false },
         });
       }
-      return await this.prisma.ossBucket.create({ data: dto });
+      const result = await this.prisma.ossBucket.create({ data: dto });
+      // 尽力配置 CORS 规则，允许浏览器直传文件
+      this.ossService.configureBucketCors(result.id).catch(() => {});
+      return result;
     } catch (dbError) {
       this.logger.error(
         `数据库写入失败，尝试回滚阿里云 Bucket: ${dto.name}`,
@@ -142,7 +145,10 @@ export class OssBucketService {
         data: { isDefault: false },
       });
     }
-    return this.prisma.ossBucket.create({ data: dto });
+    const result = await this.prisma.ossBucket.create({ data: dto });
+    // 尽力配置 CORS 规则，允许浏览器直传文件
+    this.ossService.configureBucketCors(result.id).catch(() => {});
+    return result;
   }
 
   async remove(id: string) {

@@ -10,4 +10,8 @@ export class UploadTokenDto {
   @IsOptional()
   @IsString()
   bucketId?: string;
+
+  @IsOptional()
+  @IsString()
+  contentType?: string;
 }

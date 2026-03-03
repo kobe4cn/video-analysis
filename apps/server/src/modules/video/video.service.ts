@@ -87,7 +87,6 @@ export class VideoService {
   }
 
   async getUploadToken(dto: UploadTokenDto) {
-    // 未指定 bucketId 时自动使用默认存储桶，降低前端调用复杂度
     let bucketId = dto.bucketId;
     if (!bucketId) {
       const defaultBucket = await this.prisma.ossBucket.findFirst({
@@ -99,7 +98,11 @@ export class VideoService {
       bucketId = defaultBucket.id;
     }
 
-    return this.ossService.generateUploadToken(bucketId, dto.fileName);
+    return this.ossService.generateSignedUploadUrl(
+      bucketId,
+      dto.fileName,
+      dto.contentType,
+    );
   }
 
   async completeUpload(dto: UploadCompleteDto, userId: string) {

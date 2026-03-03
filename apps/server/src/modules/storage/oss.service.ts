@@ -37,25 +37,30 @@ export class OssService {
     return { client, bucket, config: bucket.ossConfig };
   }
 
-  // 生成临时上传凭证，返回前端直传 OSS 所需的全部参数
-  // 注意：完整的 STS 需要阿里云 RAM 角色配置，这里简化为直接返回 AK（生产环境应使用 STS）
-  async generateUploadToken(bucketId: string, fileName: string) {
-    const bucket = await this.prisma.ossBucket.findUniqueOrThrow({
-      where: { id: bucketId },
-      include: { ossConfig: true },
-    });
-
+  /**
+   * 生成签名 PUT URL 供前端直传 OSS。
+   * 不再向前端暴露 AK/SK，而是返回已签名的一次性 URL。
+   */
+  async generateSignedUploadUrl(
+    bucketId: string,
+    fileName: string,
+    contentType?: string,
+  ) {
+    const { client, bucket } = await this.getClient(bucketId);
     const ext = fileName.substring(fileName.lastIndexOf('.'));
     const key = `videos/${uuidv4()}${ext}`;
 
+    const signedUrl = client.signatureUrl(key, {
+      method: 'PUT',
+      expires: 3600,
+      'content-type': contentType || 'application/octet-stream',
+    });
+
     return {
-      accessKeyId: bucket.ossConfig.accessKeyId,
-      accessKeySecret: bucket.ossConfig.accessKeySecret,
-      securityToken: '',
-      region: bucket.ossConfig.region,
-      bucket: bucket.name,
+      signedUrl,
       key,
-      expiration: new Date(Date.now() + 3600 * 1000).toISOString(),
+      bucketId: bucket.id,
+      contentType: contentType || 'application/octet-stream',
     };
   }
 
@@ -121,5 +126,26 @@ export class OssService {
     const client = await this.getClientByConfigId(configId);
     await client.deleteBucket(bucketName);
     this.logger.log(`Bucket "${bucketName}" 已从阿里云删除`);
+  }
+
+  /** 为 Bucket 配置 CORS 规则，允许浏览器直传文件 */
+  async configureBucketCors(bucketId: string): Promise<void> {
+    const { client, bucket } = await this.getClient(bucketId);
+    try {
+      await client.putBucketCORS(bucket.name, [
+        {
+          allowedOrigin: '*',
+          allowedMethod: ['GET', 'PUT', 'POST', 'HEAD', 'DELETE'],
+          allowedHeader: '*',
+          exposeHeader: ['ETag', 'x-oss-request-id'],
+          maxAgeSeconds: 3600,
+        },
+      ]);
+      this.logger.log(`Bucket "${bucket.name}" CORS 规则已配置`);
+    } catch (error) {
+      this.logger.warn(
+        `Bucket "${bucket.name}" CORS 配置失败（可能需要手动配置）: ${error instanceof Error ? error.message : error}`,
+      );
+    }
   }
 }

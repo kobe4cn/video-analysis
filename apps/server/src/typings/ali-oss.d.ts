@@ -12,8 +12,18 @@ declare module 'ali-oss' {
   interface SignatureUrlOptions {
     expires?: number;
     method?: string;
+    'content-type'?: string;
+    'content-md5'?: string;
     process?: string;
     response?: Record<string, string>;
+  }
+
+  interface CORSRule {
+    allowedOrigin: string | string[];
+    allowedMethod: string[];
+    allowedHeader?: string | string[];
+    exposeHeader?: string[];
+    maxAgeSeconds?: number;
   }
 
   class OSS {
@@ -37,6 +47,10 @@ declare module 'ali-oss' {
     listBuckets(
       query?: { prefix?: string; marker?: string; 'max-keys'?: number },
     ): Promise<{ buckets: Array<{ name: string; region: string; creationDate: string }> | null; res: any }>;
+    putBucketCORS(
+      name: string,
+      rules: CORSRule[],
+    ): Promise<any>;
   }
 
   export default OSS;
