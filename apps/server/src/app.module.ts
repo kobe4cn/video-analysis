@@ -11,6 +11,7 @@ import { StorageModule } from './modules/storage/storage.module';
 import { VideoModule } from './modules/video/video.module';
 import { SkillModule } from './modules/skill/skill.module';
 import { ReportModule } from './modules/report/report.module';
+import { NotificationModule } from './modules/notification/notification.module';
 import { join } from 'path';
 
 @Module({
@@ -28,6 +29,7 @@ import { join } from 'path';
     VideoModule,
     SkillModule,
     ReportModule,
+    NotificationModule,
   ],
   providers: [
     // 全局启用 JWT 认证，未标注 @Public() 的端点默认需要登录
