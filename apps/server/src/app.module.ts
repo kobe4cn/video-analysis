@@ -21,8 +21,8 @@ import { join } from 'path';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      // .env 位于 monorepo 根目录，需通过相对路径向上定位
-      envFilePath: join(__dirname, '../../../../.env'),
+      // .env 位于 monorepo 根目录；编译后 __dirname = dist/，需向上 3 层
+      envFilePath: join(__dirname, '../../../.env'),
     }),
     BullModule.forRoot({
       redis: {
