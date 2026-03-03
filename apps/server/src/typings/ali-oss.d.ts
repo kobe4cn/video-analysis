@@ -34,6 +34,9 @@ declare module 'ali-oss' {
       acl: 'private' | 'public-read' | 'public-read-write',
     ): Promise<any>;
     getBucketInfo(name: string): Promise<{ bucket: any; res: any }>;
+    listBuckets(
+      query?: { prefix?: string; marker?: string; 'max-keys'?: number },
+    ): Promise<{ buckets: Array<{ name: string; region: string; creationDate: string }> | null; res: any }>;
   }
 
   export default OSS;

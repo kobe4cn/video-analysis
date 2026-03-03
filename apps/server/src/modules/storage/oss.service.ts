@@ -100,15 +100,20 @@ export class OssService {
     });
   }
 
-  /** 在阿里云上创建 Bucket 并设置 public-read ACL */
+  /** 在阿里云上创建 Bucket（使用默认 ACL，即 private） */
   async createBucket(configId: string, bucketName: string): Promise<void> {
     const client = await this.getClientByConfigId(configId);
-
     await client.putBucket(bucketName);
     this.logger.log(`Bucket "${bucketName}" 已在阿里云上创建`);
+  }
 
-    await client.putBucketACL(bucketName, 'public-read');
-    this.logger.log(`Bucket "${bucketName}" ACL 已设置为 public-read`);
+  /** 列出阿里云账号下所有 Bucket，用于展示已有远程 Bucket 供用户关联 */
+  async listRemoteBuckets(
+    configId: string,
+  ): Promise<Array<{ name: string; region: string; creationDate: string }>> {
+    const client = await this.getClientByConfigId(configId);
+    const result = await client.listBuckets();
+    return result.buckets ?? [];
   }
 
   /** 在阿里云上删除 Bucket（Bucket 必须为空，否则阿里云会拒绝） */

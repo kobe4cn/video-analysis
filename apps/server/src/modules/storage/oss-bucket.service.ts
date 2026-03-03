@@ -89,6 +89,17 @@ export class OssBucketService {
     }
   }
 
+  /** 关联阿里云上已有的 Bucket，仅写入数据库不在阿里云创建 */
+  async link(dto: CreateOssBucketDto) {
+    if (dto.isDefault) {
+      await this.prisma.ossBucket.updateMany({
+        where: { isDefault: true },
+        data: { isDefault: false },
+      });
+    }
+    return this.prisma.ossBucket.create({ data: dto });
+  }
+
   async remove(id: string) {
     const bucket = await this.prisma.ossBucket.findUnique({
       where: { id },
