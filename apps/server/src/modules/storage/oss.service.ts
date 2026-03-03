@@ -47,8 +47,8 @@ export class OssService {
     contentType?: string,
   ) {
     const { client, bucket } = await this.getClient(bucketId);
-    const ext = fileName.substring(fileName.lastIndexOf('.'));
-    const key = `videos/${uuidv4()}${ext}`;
+    const safe = fileName.replace(/[?#&\\]/g, '_');
+    const key = `videos/${uuidv4()}_${safe}`;
 
     const signedUrl = client.signatureUrl(key, {
       method: 'PUT',
@@ -84,8 +84,9 @@ export class OssService {
   /** 将本地文件上传到 OSS，返回 ossKey 和公开访问 URL */
   async uploadFile(bucketId: string, fileName: string, filePath: string) {
     const { client } = await this.getClient(bucketId);
-    const ext = fileName.substring(fileName.lastIndexOf('.'));
-    const key = `videos/${uuidv4()}${ext}`;
+    // 用 UUID 前缀保证唯一性，同时保留原始文件名便于在 OSS 控制台中辨识
+    const safe = fileName.replace(/[?#&\\]/g, '_');
+    const key = `videos/${uuidv4()}_${safe}`;
     await client.put(key, filePath);
     this.logger.log(`文件已上传到 OSS: ${key}`);
     const ossUrl = await this.getPublicUrl(bucketId, key);
