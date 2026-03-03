@@ -90,7 +90,7 @@ export class AuthService {
     return user;
   }
 
-  private generateTokens(user: { id: string; email: string; role: string }) {
+  private generateTokens(user: { id: string; email: string; name: string; role: string }) {
     const payload = { sub: user.id, email: user.email, role: user.role };
 
     // expiresIn 需要类型断言，因为 ConfigService.get 返回 string 而 jwt 要求 StringValue 模板字面量类型
@@ -107,7 +107,7 @@ export class AuthService {
     return {
       accessToken,
       refreshToken,
-      user: { id: user.id, email: user.email, role: user.role },
+      user: { id: user.id, email: user.email, name: user.name, role: user.role },
     };
   }
 }
