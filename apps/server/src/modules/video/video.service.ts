@@ -107,17 +107,20 @@ export class VideoService {
       bucketId = defaultBucket.id;
     }
 
+    // Multer 默认以 latin1 编码 originalname，中文会乱码，需还原为 UTF-8
+    const fileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+
     try {
       const { key, ossUrl } = await this.ossService.uploadFile(
         bucketId,
-        file.originalname,
+        fileName,
         file.path,
       );
 
       const video = await this.prisma.video.create({
         data: {
-          title: title || file.originalname.replace(/\.[^/.]+$/, ''),
-          fileName: file.originalname,
+          title: title || fileName.replace(/\.[^/.]+$/, ''),
+          fileName,
           ossKey: key,
           ossUrl,
           fileSize: BigInt(file.size),
