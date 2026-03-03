@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Delete, Param, Body, Query,
+  Controller, Get, Post, Patch, Delete, Param, Body, Query,
   UseInterceptors, UploadedFile, BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -10,6 +10,7 @@ import { mkdirSync } from 'fs';
 import { VideoService } from './video.service';
 import { UploadTokenDto } from './dto/upload-token.dto';
 import { UploadCompleteDto } from './dto/upload-complete.dto';
+import { CreateFolderDto } from './dto/create-folder.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
@@ -20,16 +21,45 @@ try { mkdirSync(UPLOAD_DIR, { recursive: true }); } catch {}
 export class VideoController {
   constructor(private videoService: VideoService) {}
 
+  // ─── 文件夹端点（放在 :id 路由之前，避免 "folders" 被当作 id 匹配） ───
+
+  @Post('folders')
+  @Roles('OPERATOR')
+  createFolder(@Body() dto: CreateFolderDto, @CurrentUser('id') userId: string) {
+    return this.videoService.createFolder(dto.name, userId);
+  }
+
+  @Get('folders')
+  findAllFolders() {
+    return this.videoService.findAllFolders();
+  }
+
+  @Patch('folders/:id')
+  @Roles('OPERATOR')
+  renameFolder(@Param('id') id: string, @Body() dto: CreateFolderDto) {
+    return this.videoService.renameFolder(id, dto.name);
+  }
+
+  @Delete('folders/:id')
+  @Roles('OPERATOR')
+  removeFolder(@Param('id') id: string) {
+    return this.videoService.removeFolder(id);
+  }
+
+  // ─── 视频端点 ───
+
   @Get()
   findAll(
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
     @Query('search') search?: string,
+    @Query('folderId') folderId?: string,
   ) {
     return this.videoService.findAll({
       page: page ? parseInt(page) : undefined,
       pageSize: pageSize ? parseInt(pageSize) : undefined,
       search,
+      folderId,
     });
   }
 
@@ -51,10 +81,11 @@ export class VideoController {
     @UploadedFile() file: Express.Multer.File,
     @Body('title') title: string,
     @Body('bucketId') bucketId: string,
+    @Body('folderId') folderId: string,
     @CurrentUser('id') userId: string,
   ) {
     if (!file) throw new BadRequestException('未选择文件');
-    return this.videoService.uploadVideo(file, title, bucketId, userId);
+    return this.videoService.uploadVideo(file, title, bucketId, userId, folderId || undefined);
   }
 
   @Post('upload-token')

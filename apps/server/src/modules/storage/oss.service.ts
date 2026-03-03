@@ -78,18 +78,16 @@ export class OssService {
       include: { ossConfig: true },
     });
     const region = this.normalizeRegion(bucket.ossConfig.region);
-    // ossKey 可能含中文等非 ASCII 字符，需对路径各段分别编码以生成合法 URL
-    const encodedKey = ossKey
-      .split('/')
-      .map((seg) => encodeURIComponent(seg))
-      .join('/');
-    return `https://${bucket.name}.${region}.aliyuncs.com/${encodedKey}`;
+    // 保持原始中文路径，浏览器和 OSS 均能正确处理未编码的 Unicode URL
+    return `https://${bucket.name}.${region}.aliyuncs.com/${ossKey}`;
   }
 
-  /** 将本地文件上传到 OSS，返回 ossKey 和公开访问 URL */
-  async uploadFile(bucketId: string, fileName: string, filePath: string) {
+  /** 将本地文件上传到 OSS，folderPath 用于在 videos/ 下创建子目录结构 */
+  async uploadFile(bucketId: string, fileName: string, filePath: string, folderPath?: string) {
     const { client } = await this.getClient(bucketId);
-    const key = `videos/${fileName}`;
+    const key = folderPath
+      ? `videos/${folderPath}/${fileName}`
+      : `videos/${fileName}`;
     await client.put(key, filePath);
     this.logger.log(`文件已上传到 OSS: ${key}`);
     const ossUrl = await this.getPublicUrl(bucketId, key);

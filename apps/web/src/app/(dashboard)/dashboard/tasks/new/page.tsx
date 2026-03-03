@@ -9,9 +9,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, ArrowRight, Check, Video, Sparkles, Bot } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Video, Sparkles, Bot, FolderOpen, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
+
+interface FolderItem {
+  id: string;
+  name: string;
+  videoCount: number;
+}
 
 export default function CreateTaskPage() {
   const router = useRouter();
@@ -20,10 +26,23 @@ export default function CreateTaskPage() {
   const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set());
   const [selectedSkill, setSelectedSkill] = useState('');
   const [selectedModel, setSelectedModel] = useState('');
+  // 文件夹导航：null 表示文件夹列表，具体 id 表示进入该文件夹，'root' 表示未归类
+  const [currentFolder, setCurrentFolder] = useState<{ id: string; name: string } | null>(null);
 
+  const { data: foldersData } = useQuery({
+    queryKey: ['video-folders'],
+    queryFn: () => apiClient.get<FolderItem[]>('/videos/folders'),
+  });
+
+  // 仅在进入了某个文件夹（或未归类）时才请求视频列表
   const { data: videosData } = useQuery({
-    queryKey: ['all-videos'],
-    queryFn: () => apiClient.get<{ items: any[] }>('/videos?page=1&pageSize=100'),
+    queryKey: ['folder-videos', currentFolder?.id],
+    queryFn: () => {
+      const params = new URLSearchParams({ page: '1', pageSize: '100' });
+      params.set('folderId', currentFolder!.id);
+      return apiClient.get<{ items: any[] }>(`/videos?${params.toString()}`);
+    },
+    enabled: !!currentFolder,
   });
 
   const { data: skillsData } = useQuery({
@@ -92,28 +111,102 @@ export default function CreateTaskPage() {
         ))}
       </div>
 
-      {/* Step 1: 选择视频 */}
+      {/* Step 1: 选择视频 —— 先选文件夹再从中勾选视频，跨文件夹选择时已选数量持续保留 */}
       {step === 1 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Video className="h-5 w-5" />选择视频 ({selectedVideos.size} 已选)
+              <Video className="h-5 w-5" />选择视频
+              {selectedVideos.size > 0 && (
+                <Badge variant="secondary">{selectedVideos.size} 已选</Badge>
+              )}
             </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 max-h-96 overflow-auto">
-            {videos.map((v: any) => (
-              <div
-                key={v.id}
-                className={`flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-muted ${selectedVideos.has(v.id) ? 'bg-muted border border-primary' : ''}`}
-                onClick={() => toggleVideo(v.id)}
-              >
-                <input type="checkbox" checked={selectedVideos.has(v.id)} readOnly className="h-4 w-4" />
-                <span className="flex-1">{v.title}</span>
-                {v.hasReport && <Badge variant="outline" className="text-xs">有报告</Badge>}
+
+            {/* 面包屑导航 */}
+            {currentFolder && (
+              <div className="flex items-center gap-1 text-sm pt-1">
+                <button
+                  onClick={() => setCurrentFolder(null)}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  选择文件夹
+                </button>
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                <span className="font-medium">{currentFolder.name}</span>
               </div>
-            ))}
-            {videos.length === 0 && (
-              <p className="text-muted-foreground text-center py-4">暂无视频，请先上传</p>
+            )}
+          </CardHeader>
+          <CardContent>
+            {/* 文件夹列表视图 */}
+            {!currentFolder && (
+              <div className="space-y-2">
+                {/* 未归类视频入口 */}
+                <div
+                  className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-muted transition-colors"
+                  onClick={() => setCurrentFolder({ id: 'root', name: '未归类视频' })}
+                >
+                  <Video className="h-6 w-6 text-muted-foreground shrink-0" />
+                  <span className="flex-1 font-medium">未归类视频</span>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </div>
+
+                {foldersData?.map((folder) => (
+                  <div
+                    key={folder.id}
+                    className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-muted transition-colors"
+                    onClick={() => setCurrentFolder({ id: folder.id, name: folder.name })}
+                  >
+                    <FolderOpen className="h-6 w-6 text-amber-500 shrink-0" />
+                    <span className="flex-1 font-medium">{folder.name}</span>
+                    <span className="text-sm text-muted-foreground">{folder.videoCount} 个视频</span>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                ))}
+
+                {(!foldersData || foldersData.length === 0) && (
+                  <p className="text-muted-foreground text-center py-4">暂无文件夹，请先在视频管理中创建</p>
+                )}
+              </div>
+            )}
+
+            {/* 视频列表视图：进入文件夹后显示 */}
+            {currentFolder && (
+              <div className="space-y-2 max-h-96 overflow-auto">
+                {/* 全选/取消全选 */}
+                {videos.length > 0 && (
+                  <div className="flex items-center gap-2 pb-2 border-b mb-2">
+                    <button
+                      className="text-sm text-primary hover:underline"
+                      onClick={() => {
+                        const next = new Set(selectedVideos);
+                        const allSelected = videos.every((v: any) => next.has(v.id));
+                        videos.forEach((v: any) => {
+                          if (allSelected) next.delete(v.id);
+                          else next.add(v.id);
+                        });
+                        setSelectedVideos(next);
+                      }}
+                    >
+                      {videos.every((v: any) => selectedVideos.has(v.id)) ? '取消本页全选' : '全选本页'}
+                    </button>
+                  </div>
+                )}
+
+                {videos.map((v: any) => (
+                  <div
+                    key={v.id}
+                    className={`flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-muted ${selectedVideos.has(v.id) ? 'bg-muted border border-primary' : ''}`}
+                    onClick={() => toggleVideo(v.id)}
+                  >
+                    <input type="checkbox" checked={selectedVideos.has(v.id)} readOnly className="h-4 w-4" />
+                    <span className="flex-1">{v.title}</span>
+                    {v.hasReport && <Badge variant="outline" className="text-xs">有报告</Badge>}
+                  </div>
+                ))}
+                {videos.length === 0 && (
+                  <p className="text-muted-foreground text-center py-4">该文件夹内暂无视频</p>
+                )}
+              </div>
             )}
           </CardContent>
         </Card>

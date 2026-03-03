@@ -33,6 +33,12 @@ interface BucketOption {
   isDefault: boolean;
 }
 
+interface FolderOption {
+  id: string;
+  name: string;
+  videoCount: number;
+}
+
 interface FileItem {
   id: string;
   file: File;
@@ -45,6 +51,7 @@ interface FileItem {
 interface VideoUploadDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  defaultFolderId?: string;
 }
 
 function formatFileSize(bytes: number): string {
@@ -56,8 +63,9 @@ function formatFileSize(bytes: number): string {
 
 // ─── 组件 ───
 
-export function VideoUploadDialog({ open, onOpenChange }: VideoUploadDialogProps) {
+export function VideoUploadDialog({ open, onOpenChange, defaultFolderId }: VideoUploadDialogProps) {
   const [bucketId, setBucketId] = useState('');
+  const [folderId, setFolderId] = useState('');
   const [files, setFiles] = useState<FileItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -69,17 +77,27 @@ export function VideoUploadDialog({ open, onOpenChange }: VideoUploadDialogProps
     enabled: open,
   });
 
-  // 打开时预选默认 Bucket，关闭时重置状态
+  const { data: folders } = useQuery({
+    queryKey: ['video-folders'],
+    queryFn: () => apiClient.get<FolderOption[]>('/videos/folders'),
+    enabled: open,
+  });
+
+  // 打开时预选默认 Bucket 和文件夹，关闭时重置状态
   useEffect(() => {
     if (open && buckets) {
       const defaultBucket = buckets.find((b) => b.isDefault);
       if (defaultBucket && !bucketId) setBucketId(defaultBucket.id);
     }
+    if (open && defaultFolderId) {
+      setFolderId(defaultFolderId);
+    }
     if (!open) {
       setFiles([]);
       setBucketId('');
+      setFolderId('');
     }
-  }, [open, buckets]);
+  }, [open, buckets, defaultFolderId]);
 
   // ─── 文件管理 ───
 
@@ -114,6 +132,9 @@ export function VideoUploadDialog({ open, onOpenChange }: VideoUploadDialogProps
       formData.append('file', item.file);
       formData.append('title', item.title || item.file.name);
       formData.append('bucketId', bucketId);
+      if (folderId && folderId !== 'none') {
+        formData.append('folderId', folderId);
+      }
 
       await apiClient.upload('/videos/upload', formData, (pct) => {
         // 前端→后端上传占 90%，后端→OSS 传输占剩余 10%
@@ -148,6 +169,7 @@ export function VideoUploadDialog({ open, onOpenChange }: VideoUploadDialogProps
 
     setUploading(false);
     queryClient.invalidateQueries({ queryKey: ['videos'] });
+    queryClient.invalidateQueries({ queryKey: ['video-folders'] });
 
     if (successCount === pending.length) {
       toast.success(`${successCount} 个视频全部上传成功`);
@@ -172,36 +194,53 @@ export function VideoUploadDialog({ open, onOpenChange }: VideoUploadDialogProps
         <DialogHeader>
           <DialogTitle>上传视频</DialogTitle>
           <DialogDescription>
-            选择目标 Bucket 并添加视频文件，支持同时上传多个视频
+            选择目标 Bucket 和文件夹，添加视频文件，支持同时上传多个视频
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 flex-1 overflow-hidden flex flex-col">
-          {/* Bucket 选择器 */}
-          <div>
-            <Label>目标 Bucket</Label>
-            {buckets?.length === 0 ? (
-              <p className="text-sm text-muted-foreground mt-1">
-                暂无可用 Bucket，请先在存储管理中配置
-              </p>
-            ) : (
-              <Select value={bucketId} onValueChange={setBucketId} disabled={uploading}>
+          {/* Bucket 和文件夹选择 */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>目标 Bucket</Label>
+              {buckets?.length === 0 ? (
+                <p className="text-sm text-muted-foreground mt-1">
+                  暂无可用 Bucket，请先在存储管理中配置
+                </p>
+              ) : (
+                <Select value={bucketId} onValueChange={setBucketId} disabled={uploading}>
+                  <SelectTrigger className="mt-1 w-full">
+                    <SelectValue placeholder="选择 Bucket" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {buckets?.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}
+                        {b.isDefault && ' (默认)'}
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          {b.ossConfigName}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            <div>
+              <Label>目标文件夹（可选）</Label>
+              <Select value={folderId || 'none'} onValueChange={(v) => setFolderId(v === 'none' ? '' : v)} disabled={uploading}>
                 <SelectTrigger className="mt-1 w-full">
-                  <SelectValue placeholder="选择 Bucket" />
+                  <SelectValue placeholder="不选择文件夹" />
                 </SelectTrigger>
                 <SelectContent>
-                  {buckets?.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.name}
-                      {b.isDefault && ' (默认)'}
-                      <span className="ml-1 text-xs text-muted-foreground">
-                        {b.ossConfigName}
-                      </span>
-                    </SelectItem>
+                  <SelectItem value="none">不选择文件夹</SelectItem>
+                  {folders?.map((f) => (
+                    <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            )}
+            </div>
           </div>
 
           {/* 文件选择区域 */}

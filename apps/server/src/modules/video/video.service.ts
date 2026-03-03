@@ -12,14 +12,66 @@ export class VideoService {
     private ossService: OssService,
   ) {}
 
-  async findAll(params: { page?: number; pageSize?: number; search?: string }) {
+  // ─── 文件夹管理 ───
+
+  async createFolder(name: string, userId: string) {
+    return this.prisma.videoFolder.create({
+      data: { name, createdBy: userId },
+    });
+  }
+
+  async findAllFolders() {
+    const folders = await this.prisma.videoFolder.findMany({
+      include: { _count: { select: { videos: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    return folders.map((f) => ({
+      id: f.id,
+      name: f.name,
+      videoCount: f._count.videos,
+      createdAt: f.createdAt.toISOString(),
+    }));
+  }
+
+  async renameFolder(id: string, name: string) {
+    const folder = await this.prisma.videoFolder.findUnique({ where: { id } });
+    if (!folder) throw new NotFoundException('文件夹不存在');
+    return this.prisma.videoFolder.update({
+      where: { id },
+      data: { name },
+    });
+  }
+
+  async removeFolder(id: string) {
+    const folder = await this.prisma.videoFolder.findUnique({
+      where: { id },
+      include: { _count: { select: { videos: true } } },
+    });
+    if (!folder) throw new NotFoundException('文件夹不存在');
+    if (folder._count.videos > 0) {
+      throw new BadRequestException('文件夹内仍有视频，无法删除');
+    }
+    await this.prisma.videoFolder.delete({ where: { id } });
+    return { success: true };
+  }
+
+  // ─── 视频管理 ───
+
+  async findAll(params: { page?: number; pageSize?: number; search?: string; folderId?: string }) {
     const page = params.page || 1;
     const pageSize = params.pageSize || 20;
     const skip = (page - 1) * pageSize;
 
-    const where = params.search
-      ? { title: { contains: params.search, mode: 'insensitive' as const } }
-      : {};
+    const where: any = {};
+    if (params.search) {
+      where.title = { contains: params.search, mode: 'insensitive' };
+    }
+    // folderId=root 表示查询未归类到任何文件夹的视频
+    if (params.folderId === 'root') {
+      where.folderId = null;
+    } else if (params.folderId) {
+      where.folderId = params.folderId;
+    }
 
     const [items, total] = await Promise.all([
       this.prisma.video.findMany({
@@ -96,6 +148,7 @@ export class VideoService {
     title: string,
     bucketId: string,
     userId: string,
+    folderId?: string,
   ) {
     if (!bucketId) {
       const defaultBucket = await this.prisma.ossBucket.findFirst({
@@ -110,11 +163,20 @@ export class VideoService {
     // Multer 默认以 latin1 编码 originalname，中文会乱码，需还原为 UTF-8
     const fileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
 
+    // 查询文件夹名称用于构建 OSS 路径
+    let folderPath: string | undefined;
+    if (folderId) {
+      const folder = await this.prisma.videoFolder.findUnique({ where: { id: folderId } });
+      if (!folder) throw new NotFoundException('文件夹不存在');
+      folderPath = folder.name;
+    }
+
     try {
       const { key, ossUrl } = await this.ossService.uploadFile(
         bucketId,
         fileName,
         file.path,
+        folderPath,
       );
 
       const video = await this.prisma.video.create({
@@ -126,6 +188,7 @@ export class VideoService {
           fileSize: BigInt(file.size),
           bucketId,
           uploadedBy: userId,
+          folderId: folderId || null,
         },
       });
 
