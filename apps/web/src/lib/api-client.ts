@@ -95,6 +95,50 @@ class ApiClient {
   delete<T>(path: string) {
     return this.request<T>(path, { method: 'DELETE' });
   }
+
+  /** FormData 上传，支持进度回调（用于文件上传） */
+  upload<T>(
+    path: string,
+    formData: FormData,
+    onProgress?: (percent: number) => void,
+  ): Promise<T> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+
+      if (onProgress) {
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            onProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        });
+      }
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try { resolve(JSON.parse(xhr.responseText)); }
+          catch { resolve(undefined as T); }
+        } else {
+          try {
+            const error = JSON.parse(xhr.responseText);
+            reject(new Error(error.message || `上传失败: ${xhr.status}`));
+          } catch {
+            reject(new Error(`上传失败: ${xhr.status}`));
+          }
+        }
+      });
+
+      xhr.addEventListener('error', () => reject(new Error('网络错误')));
+      xhr.addEventListener('abort', () => reject(new Error('上传已取消')));
+
+      xhr.open('POST', `${API_BASE}${path}`);
+
+      const token = this.getAccessToken();
+      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      // 不手动设置 Content-Type，浏览器会自动加上 multipart/form-data boundary
+
+      xhr.send(formData);
+    });
+  }
 }
 
 export const apiClient = new ApiClient();

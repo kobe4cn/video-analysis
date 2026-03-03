@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma.service';
 import { OssService } from '../storage/oss.service';
 import { UploadTokenDto } from './dto/upload-token.dto';
 import { UploadCompleteDto } from './dto/upload-complete.dto';
+import { unlink } from 'fs/promises';
 
 @Injectable()
 export class VideoService {
@@ -84,6 +85,57 @@ export class VideoService {
       reports: video.reports,
       createdAt: video.createdAt.toISOString(),
     };
+  }
+
+  /**
+   * 接收 Multer 临时文件，中转上传到 OSS 并创建视频记录。
+   * 无需前端配置 CORS，所有 OSS 交互在服务端完成。
+   */
+  async uploadVideo(
+    file: Express.Multer.File,
+    title: string,
+    bucketId: string,
+    userId: string,
+  ) {
+    if (!bucketId) {
+      const defaultBucket = await this.prisma.ossBucket.findFirst({
+        where: { isDefault: true },
+      });
+      if (!defaultBucket) {
+        throw new NotFoundException('未配置默认存储桶，请先在设置中配置');
+      }
+      bucketId = defaultBucket.id;
+    }
+
+    try {
+      const { key, ossUrl } = await this.ossService.uploadFile(
+        bucketId,
+        file.originalname,
+        file.path,
+      );
+
+      const video = await this.prisma.video.create({
+        data: {
+          title: title || file.originalname.replace(/\.[^/.]+$/, ''),
+          fileName: file.originalname,
+          ossKey: key,
+          ossUrl,
+          fileSize: BigInt(file.size),
+          bucketId,
+          uploadedBy: userId,
+        },
+      });
+
+      return {
+        id: video.id,
+        title: video.title,
+        fileName: video.fileName,
+        ossUrl: video.ossUrl,
+        fileSize: Number(video.fileSize),
+      };
+    } finally {
+      try { await unlink(file.path); } catch {}
+    }
   }
 
   async getUploadToken(dto: UploadTokenDto) {

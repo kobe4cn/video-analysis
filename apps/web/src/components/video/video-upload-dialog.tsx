@@ -42,19 +42,10 @@ interface FileItem {
   error?: string;
 }
 
-interface UploadTokenResponse {
-  signedUrl: string;
-  key: string;
-  bucketId: string;
-  contentType: string;
-}
-
 interface VideoUploadDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
-// ─── 工具函数 ───
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + ' B';
@@ -70,7 +61,6 @@ export function VideoUploadDialog({ open, onOpenChange }: VideoUploadDialogProps
   const [files, setFiles] = useState<FileItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const abortControllers = useRef<Map<string, XMLHttpRequest>>(new Map());
   const queryClient = useQueryClient();
 
   const { data: buckets } = useQuery({
@@ -114,63 +104,20 @@ export function VideoUploadDialog({ open, onOpenChange }: VideoUploadDialogProps
     setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, ...updates } : f)));
   };
 
-  // ─── 单文件上传 ───
+  // ─── 单文件上传（通过后端中转到 OSS，无 CORS 问题） ───
 
   const uploadSingleFile = async (item: FileItem): Promise<boolean> => {
     updateFile(item.id, { status: 'uploading', progress: 0 });
 
     try {
-      // 1. 向后端请求签名上传 URL
-      const tokenData = await apiClient.post<UploadTokenResponse>(
-        '/videos/upload-token',
-        {
-          fileName: item.file.name,
-          fileSize: item.file.size,
-          bucketId,
-          contentType: item.file.type || 'application/octet-stream',
-        },
-      );
+      const formData = new FormData();
+      formData.append('file', item.file);
+      formData.append('title', item.title || item.file.name);
+      formData.append('bucketId', bucketId);
 
-      // 2. 通过签名 URL 直传文件到 OSS
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        abortControllers.current.set(item.id, xhr);
-
-        xhr.upload.addEventListener('progress', (e) => {
-          if (e.lengthComputable) {
-            const pct = Math.round((e.loaded / e.total) * 100);
-            updateFile(item.id, { progress: Math.min(pct, 99) });
-          }
-        });
-        xhr.addEventListener('load', () => {
-          abortControllers.current.delete(item.id);
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve();
-          } else {
-            reject(new Error(`OSS 返回 ${xhr.status}，请检查 Bucket 权限`));
-          }
-        });
-        xhr.addEventListener('error', () => {
-          abortControllers.current.delete(item.id);
-          reject(new Error('网络错误，请检查 Bucket 的 CORS 配置是否允许浏览器上传'));
-        });
-        xhr.addEventListener('abort', () => {
-          abortControllers.current.delete(item.id);
-          reject(new Error('上传已取消'));
-        });
-
-        xhr.open('PUT', tokenData.signedUrl);
-        xhr.setRequestHeader('Content-Type', tokenData.contentType);
-        xhr.send(item.file);
-      });
-
-      // 3. 通知后端创建视频记录
-      await apiClient.post('/videos/complete', {
-        ossKey: tokenData.key,
-        fileName: item.file.name,
-        title: item.title || item.file.name,
-        fileSize: item.file.size,
-        bucketId: tokenData.bucketId,
+      await apiClient.upload('/videos/upload', formData, (pct) => {
+        // 前端→后端上传占 90%，后端→OSS 传输占剩余 10%
+        updateFile(item.id, { progress: Math.round(pct * 0.9) });
       });
 
       updateFile(item.id, { status: 'done', progress: 100 });
@@ -182,7 +129,7 @@ export function VideoUploadDialog({ open, onOpenChange }: VideoUploadDialogProps
     }
   };
 
-  // ─── 批量上传 ───
+  // ─── 批量上传（逐个顺序上传） ───
 
   const handleUploadAll = async () => {
     if (!bucketId) {
@@ -208,7 +155,7 @@ export function VideoUploadDialog({ open, onOpenChange }: VideoUploadDialogProps
     } else if (successCount > 0) {
       toast.warning(`${successCount}/${pending.length} 个视频上传成功，部分失败`);
     } else {
-      toast.error('上传失败，请检查网络连接或 Bucket 配置');
+      toast.error('上传失败');
     }
   };
 
@@ -218,8 +165,6 @@ export function VideoUploadDialog({ open, onOpenChange }: VideoUploadDialogProps
   };
 
   const pendingCount = files.filter((f) => f.status === 'pending' || f.status === 'error').length;
-
-  // ─── 渲染 ───
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
@@ -304,7 +249,6 @@ export function VideoUploadDialog({ open, onOpenChange }: VideoUploadDialogProps
                       </span>
                     </div>
 
-                    {/* 待上传：可编辑标题 */}
                     {item.status === 'pending' && (
                       <Input
                         value={item.title}
@@ -314,17 +258,17 @@ export function VideoUploadDialog({ open, onOpenChange }: VideoUploadDialogProps
                       />
                     )}
 
-                    {/* 上传中：进度条 */}
                     {item.status === 'uploading' && (
                       <div className="space-y-1">
                         <Progress value={item.progress} className="h-1.5" />
                         <p className="text-xs text-muted-foreground">
-                          上传中 {item.progress}%
+                          {item.progress < 90
+                            ? `上传中 ${item.progress}%`
+                            : '正在写入 OSS...'}
                         </p>
                       </div>
                     )}
 
-                    {/* 完成 */}
                     {item.status === 'done' && (
                       <div className="flex items-center gap-1 text-xs text-green-600">
                         <CheckCircle2 className="h-3.5 w-3.5" />
@@ -332,7 +276,6 @@ export function VideoUploadDialog({ open, onOpenChange }: VideoUploadDialogProps
                       </div>
                     )}
 
-                    {/* 失败 */}
                     {item.status === 'error' && (
                       <div className="flex items-center gap-1 text-xs text-destructive">
                         <AlertCircle className="h-3.5 w-3.5" />
@@ -341,7 +284,6 @@ export function VideoUploadDialog({ open, onOpenChange }: VideoUploadDialogProps
                     )}
                   </div>
 
-                  {/* 移除按钮（上传完成或上传中不可移除） */}
                   {!uploading && item.status !== 'done' && (
                     <Button
                       variant="ghost"

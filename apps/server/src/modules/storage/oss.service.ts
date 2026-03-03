@@ -81,6 +81,17 @@ export class OssService {
     return `https://${bucket.name}.${region}.aliyuncs.com/${ossKey}`;
   }
 
+  /** 将本地文件上传到 OSS，返回 ossKey 和公开访问 URL */
+  async uploadFile(bucketId: string, fileName: string, filePath: string) {
+    const { client } = await this.getClient(bucketId);
+    const ext = fileName.substring(fileName.lastIndexOf('.'));
+    const key = `videos/${uuidv4()}${ext}`;
+    await client.put(key, filePath);
+    this.logger.log(`文件已上传到 OSS: ${key}`);
+    const ossUrl = await this.getPublicUrl(bucketId, key);
+    return { key, ossUrl };
+  }
+
   async deleteObject(bucketId: string, ossKey: string): Promise<void> {
     const { client } = await this.getClient(bucketId);
     await client.delete(ossKey);
