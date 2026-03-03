@@ -109,7 +109,7 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
 
       {/* 报告正文：渲染 Markdown 格式的分析内容 */}
       <Card>
-        <CardContent className="prose prose-sm max-w-none py-6 dark:prose-invert">
+        <CardContent className="report-content prose prose-neutral max-w-none py-8 px-8 dark:prose-invert">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>
             {displayContent || '暂无内容'}
           </ReactMarkdown>

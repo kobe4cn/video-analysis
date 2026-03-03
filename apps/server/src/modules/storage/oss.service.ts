@@ -78,7 +78,12 @@ export class OssService {
       include: { ossConfig: true },
     });
     const region = this.normalizeRegion(bucket.ossConfig.region);
-    return `https://${bucket.name}.${region}.aliyuncs.com/${ossKey}`;
+    // ossKey 可能含中文等非 ASCII 字符，需对路径各段分别编码以生成合法 URL
+    const encodedKey = ossKey
+      .split('/')
+      .map((seg) => encodeURIComponent(seg))
+      .join('/');
+    return `https://${bucket.name}.${region}.aliyuncs.com/${encodedKey}`;
   }
 
   /** 将本地文件上传到 OSS，返回 ossKey 和公开访问 URL */

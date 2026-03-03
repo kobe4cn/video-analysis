@@ -10,7 +10,7 @@ export class TaskController {
   constructor(private taskService: TaskService) {}
 
   @Post()
-  create(@Body() dto: CreateTaskDto, @CurrentUser('sub') userId: string) {
+  create(@Body() dto: CreateTaskDto, @CurrentUser('id') userId: string) {
     return this.taskService.create(dto, userId);
   }
 

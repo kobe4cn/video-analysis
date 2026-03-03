@@ -2,6 +2,8 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+@plugin "@tailwindcss/typography";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -123,4 +125,57 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* ─── 报告内容排版增强 ─── */
+
+.report-content h2 {
+  margin-top: 2.5em;
+  padding-bottom: 0.5em;
+  border-bottom: 2px solid var(--border);
+}
+
+.report-content h2:first-child {
+  margin-top: 0;
+}
+
+.report-content h3 {
+  margin-top: 2em;
+}
+
+/* 引用块：用于口播内容等重点摘录，添加左侧强调色边框 */
+.report-content blockquote {
+  border-left-width: 4px;
+  border-left-color: var(--primary);
+  background-color: var(--muted);
+  border-radius: 0 0.5rem 0.5rem 0;
+  padding: 1em 1.25em;
+}
+
+/* 表格：评分表等结构化数据，增强边框和条纹背景 */
+.report-content table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.report-content th {
+  background-color: var(--muted);
+  font-weight: 600;
+}
+
+.report-content th,
+.report-content td {
+  border: 1px solid var(--border);
+  padding: 0.625rem 1rem;
+}
+
+.report-content tr:nth-child(even) {
+  background-color: color-mix(in oklch, var(--muted) 50%, transparent);
+}
+
+/* 水平分割线：报告末尾元信息前的视觉分隔 */
+.report-content hr {
+  margin-top: 3em;
+  margin-bottom: 2em;
+  border-color: var(--border);
 }

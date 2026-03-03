@@ -7,7 +7,6 @@ import {
   Video,
   ListTodo,
   Sparkles,
-  FileText,
   Settings,
   Users,
   Database,
@@ -37,7 +36,6 @@ const mainNav: NavItem[] = [
   { title: '视频管理', href: '/dashboard/videos', icon: Video, minRole: 'USER' },
   { title: '解析任务', href: '/dashboard/tasks', icon: ListTodo, minRole: 'OPERATOR' },
   { title: 'Skills 管理', href: '/dashboard/skills', icon: Sparkles, minRole: 'OPERATOR' },
-  { title: '报告', href: '/dashboard/reports', icon: FileText, minRole: 'USER' },
 ];
 
 const settingsNav: NavItem[] = [

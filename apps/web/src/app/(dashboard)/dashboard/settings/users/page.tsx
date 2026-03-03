@@ -52,7 +52,7 @@ const ROLE_VARIANTS: Record<string, 'default' | 'secondary' | 'outline'> = {
   USER: 'outline',
 };
 
-const emptyCreateForm = { email: '', password: '', name: '' };
+const emptyCreateForm = { email: '', password: '', name: '', role: 'USER' as string };
 
 export default function UsersSettingsPage() {
   const queryClient = useQueryClient();
@@ -289,6 +289,22 @@ export default function UsersSettingsPage() {
                 placeholder="输入初始密码"
                 className="mt-1"
               />
+            </div>
+            <div>
+              <Label>角色</Label>
+              <Select
+                value={createForm.role}
+                onValueChange={(val) => setCreateForm({ ...createForm, role: val })}
+              >
+                <SelectTrigger className="mt-1 w-full">
+                  <SelectValue placeholder="选择角色" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ADMIN">管理员</SelectItem>
+                  <SelectItem value="OPERATOR">操作员</SelectItem>
+                  <SelectItem value="USER">普通用户</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>

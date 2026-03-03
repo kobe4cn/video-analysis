@@ -22,6 +22,9 @@ export class LlmService {
       include: { provider: true },
     });
 
+    // OSS URL 可能含中文字符，GLM API 无法直接获取未编码的 URL
+    const encodedVideoUrl = encodeURI(params.videoUrl);
+
     // GLM API 要求 content 为多模态数组，video_url 和 text 分别作为独立元素
     const body = {
       model: model.name,
@@ -29,34 +32,39 @@ export class LlmService {
         {
           role: 'user',
           content: [
-            { type: 'video_url', video_url: { url: params.videoUrl } },
+            { type: 'video_url', video_url: { url: encodedVideoUrl } },
             { type: 'text', text: params.prompt },
           ],
         },
       ],
-      thinking: { type: 'enabled' },
     };
 
-    this.logger.log(
-      `Calling LLM API: model=${model.name}, videoUrl=${params.videoUrl.substring(0, 50)}...`,
-    );
+    const apiUrl = `${model.provider.baseUrl}/chat/completions`;
 
-    // GLM API 地址格式: baseUrl/chat/completions
-    const response = await fetch(
-      `${model.provider.baseUrl}/chat/completions`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${model.provider.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      },
+    this.logger.log(
+      `Calling LLM API:\n` +
+      `  URL: ${apiUrl}\n` +
+      `  Model: ${model.name}\n` +
+      `  Video URL: ${encodedVideoUrl}\n` +
+      `  Prompt length: ${params.prompt.length} chars`,
     );
+    this.logger.debug(`Request body: ${JSON.stringify(body, null, 2)}`);
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${model.provider.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
-      this.logger.error(`GLM API error: ${response.status} ${errorText}`);
+      this.logger.error(
+        `GLM API error: ${response.status} ${errorText}\n` +
+        `  Request body: ${JSON.stringify(body)}`,
+      );
       throw new Error(`GLM API error: ${response.status} ${errorText}`);
     }
 
