@@ -14,6 +14,7 @@ import { SkillModule } from './modules/skill/skill.module';
 import { ReportModule } from './modules/report/report.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { TaskModule } from './modules/task/task.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { join } from 'path';
 
 @Module({
@@ -39,6 +40,7 @@ import { join } from 'path';
     ReportModule,
     NotificationModule,
     TaskModule,
+    DashboardModule,
   ],
   providers: [
     // 全局启用 JWT 认证，未标注 @Public() 的端点默认需要登录
