@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { BullModule } from '@nestjs/bull';
 import { APP_GUARD } from '@nestjs/core';
 import { PrismaModule } from './common/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -12,6 +13,7 @@ import { VideoModule } from './modules/video/video.module';
 import { SkillModule } from './modules/skill/skill.module';
 import { ReportModule } from './modules/report/report.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { TaskModule } from './modules/task/task.module';
 import { join } from 'path';
 
 @Module({
@@ -20,6 +22,12 @@ import { join } from 'path';
       isGlobal: true,
       // .env 位于 monorepo 根目录，需通过相对路径向上定位
       envFilePath: join(__dirname, '../../../../.env'),
+    }),
+    BullModule.forRoot({
+      redis: {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379', 10),
+      },
     }),
     PrismaModule,
     AuthModule,
@@ -30,6 +38,7 @@ import { join } from 'path';
     SkillModule,
     ReportModule,
     NotificationModule,
+    TaskModule,
   ],
   providers: [
     // 全局启用 JWT 认证，未标注 @Public() 的端点默认需要登录
