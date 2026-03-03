@@ -38,6 +38,51 @@ export class OssBucketService {
     }));
   }
 
+  /**
+   * 返回本地已关联的 Bucket + 阿里云上未关联的 Bucket，
+   * 让前端能在同一张表中展示所有 Bucket 的全貌。
+   */
+  async findAllWithRemote() {
+    const localBuckets = await this.findAll();
+    const localNames = new Set(localBuckets.map((b) => b.name));
+
+    const configs = await this.prisma.ossConfig.findMany();
+
+    const unlinked: Array<{
+      name: string;
+      region: string;
+      ossConfigId: string;
+      ossConfigName: string;
+      creationDate: string;
+    }> = [];
+
+    // 并行拉取所有配置下的远程 Bucket，某个配置凭证失效不影响其他配置
+    const results = await Promise.allSettled(
+      configs.map(async (config) => {
+        const remotes = await this.ossService.listRemoteBuckets(config.id);
+        return { config, remotes };
+      }),
+    );
+
+    for (const result of results) {
+      if (result.status !== 'fulfilled') continue;
+      const { config, remotes } = result.value;
+      for (const rb of remotes) {
+        if (!localNames.has(rb.name)) {
+          unlinked.push({
+            name: rb.name,
+            region: rb.region,
+            ossConfigId: config.id,
+            ossConfigName: config.name,
+            creationDate: rb.creationDate,
+          });
+        }
+      }
+    }
+
+    return { linked: localBuckets, unlinked };
+  }
+
   async create(dto: CreateOssBucketDto) {
     // 第 1 阶段：在阿里云上创建 Bucket
     // 先操作远端，远端失败时无需任何本地清理

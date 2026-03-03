@@ -17,7 +17,13 @@ export class OssBucketController {
     return this.service.findAll();
   }
 
-  /** 列出指定 OSS 配置下阿里云上所有 Bucket，用于关联已有 Bucket */
+  /** 返回已关联 + 阿里云上未关联的 Bucket 合并列表 */
+  @Get('all')
+  findAllWithRemote() {
+    return this.service.findAllWithRemote();
+  }
+
+  /** 列出指定 OSS 配置下阿里云上所有 Bucket */
   @Get('remote')
   listRemote(@Query('configId') configId: string) {
     return this.ossService.listRemoteBuckets(configId);

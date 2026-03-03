@@ -18,10 +18,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Tabs, TabsContent, TabsList, TabsTrigger,
-} from '@/components/ui/tabs';
-import { Plus, Pencil, Trash2, Cloud, Link } from 'lucide-react';
+import { Plus, Pencil, Trash2, Link } from 'lucide-react';
 import { toast } from 'sonner';
 
 // ─── 类型定义 ───
@@ -46,10 +43,17 @@ interface OssBucket {
   createdAt: string;
 }
 
-interface RemoteBucket {
+interface UnlinkedBucket {
   name: string;
   region: string;
+  ossConfigId: string;
+  ossConfigName: string;
   creationDate: string;
+}
+
+interface AllBucketsResponse {
+  linked: OssBucket[];
+  unlinked: UnlinkedBucket[];
 }
 
 // ─── 表单初始值 ───
@@ -80,7 +84,6 @@ export default function StorageSettingsPage() {
 
   // ─── Bucket state ───
   const [bucketDialogOpen, setBucketDialogOpen] = useState(false);
-  const [bucketTab, setBucketTab] = useState<string>('link');
   const [bucketForm, setBucketForm] = useState(emptyBucketForm);
   const [deleteBucketId, setDeleteBucketId] = useState<string | null>(null);
 
@@ -91,23 +94,11 @@ export default function StorageSettingsPage() {
     queryFn: () => apiClient.get<OssConfig[]>('/oss-configs'),
   });
 
-  const { data: ossBuckets, isLoading: bucketsLoading } = useQuery({
-    queryKey: ['oss-buckets'],
-    queryFn: () => apiClient.get<OssBucket[]>('/oss-buckets'),
+  // 合并接口：一次返回已关联 + 阿里云未关联的 Bucket
+  const { data: allBuckets, isLoading: bucketsLoading } = useQuery({
+    queryKey: ['oss-buckets-all'],
+    queryFn: () => apiClient.get<AllBucketsResponse>('/oss-buckets/all'),
   });
-
-  // 选中 OSS 配置后拉取阿里云上已有的 Bucket
-  const { data: remoteBuckets, isLoading: remoteBucketsLoading } = useQuery({
-    queryKey: ['remote-buckets', bucketForm.ossConfigId],
-    queryFn: () =>
-      apiClient.get<RemoteBucket[]>(`/oss-buckets/remote?configId=${bucketForm.ossConfigId}`),
-    enabled: !!bucketForm.ossConfigId && bucketDialogOpen,
-  });
-
-  // 过滤掉已关联到本地的 Bucket
-  const availableRemoteBuckets = remoteBuckets?.filter(
-    (rb) => !ossBuckets?.some((lb) => lb.name === rb.name),
-  );
 
   // ─── OSS 配置 Mutations ───
 
@@ -150,7 +141,7 @@ export default function StorageSettingsPage() {
       apiClient.post('/oss-buckets', body),
     onSuccess: () => {
       toast.success('Bucket 创建成功');
-      queryClient.invalidateQueries({ queryKey: ['oss-buckets'] });
+      queryClient.invalidateQueries({ queryKey: ['oss-buckets-all'] });
       queryClient.invalidateQueries({ queryKey: ['oss-configs'] });
       closeBucketDialog();
     },
@@ -162,9 +153,8 @@ export default function StorageSettingsPage() {
       apiClient.post('/oss-buckets/link', body),
     onSuccess: () => {
       toast.success('Bucket 关联成功');
-      queryClient.invalidateQueries({ queryKey: ['oss-buckets'] });
+      queryClient.invalidateQueries({ queryKey: ['oss-buckets-all'] });
       queryClient.invalidateQueries({ queryKey: ['oss-configs'] });
-      closeBucketDialog();
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -173,7 +163,7 @@ export default function StorageSettingsPage() {
     mutationFn: (id: string) => apiClient.delete(`/oss-buckets/${id}`),
     onSuccess: () => {
       toast.success('Bucket 已删除');
-      queryClient.invalidateQueries({ queryKey: ['oss-buckets'] });
+      queryClient.invalidateQueries({ queryKey: ['oss-buckets-all'] });
       queryClient.invalidateQueries({ queryKey: ['oss-configs'] });
       setDeleteBucketId(null);
     },
@@ -225,12 +215,10 @@ export default function StorageSettingsPage() {
   function closeBucketDialog() {
     setBucketDialogOpen(false);
     setBucketForm(emptyBucketForm);
-    setBucketTab('link');
   }
 
   function openCreateBucket() {
     setBucketForm(emptyBucketForm);
-    setBucketTab('link');
     setBucketDialogOpen(true);
   }
 
@@ -242,16 +230,7 @@ export default function StorageSettingsPage() {
     });
   }
 
-  function handleBucketLink() {
-    linkBucketMutation.mutate({
-      name: bucketForm.name,
-      ossConfigId: bucketForm.ossConfigId,
-      isDefault: bucketForm.isDefault || undefined,
-    });
-  }
-
   const configPending = createConfigMutation.isPending || updateConfigMutation.isPending;
-  const bucketPending = createBucketMutation.isPending || linkBucketMutation.isPending;
 
   return (
     <div className="space-y-8">
@@ -319,7 +298,7 @@ export default function StorageSettingsPage() {
           <h2 className="text-2xl font-bold">Bucket 列表</h2>
           <Button onClick={openCreateBucket}>
             <Plus className="mr-2 h-4 w-4" />
-            添加 Bucket
+            新建 Bucket
           </Button>
         </div>
 
@@ -335,18 +314,22 @@ export default function StorageSettingsPage() {
               <TableRow>
                 <TableHead>名称</TableHead>
                 <TableHead>OSS 配置</TableHead>
+                <TableHead>状态</TableHead>
                 <TableHead>默认</TableHead>
                 <TableHead>视频数</TableHead>
-                <TableHead>创建时间</TableHead>
                 <TableHead className="text-right">操作</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {ossBuckets?.map((bucket) => (
+              {/* 已关联的 Bucket */}
+              {allBuckets?.linked.map((bucket) => (
                 <TableRow key={bucket.id}>
                   <TableCell className="font-medium">{bucket.name}</TableCell>
                   <TableCell>
                     <Badge variant="outline">{bucket.ossConfigName}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="default">已关联</Badge>
                   </TableCell>
                   <TableCell>
                     {bucket.isDefault ? (
@@ -356,7 +339,6 @@ export default function StorageSettingsPage() {
                     )}
                   </TableCell>
                   <TableCell>{bucket.videoCount}</TableCell>
-                  <TableCell>{new Date(bucket.createdAt).toLocaleDateString('zh-CN')}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="sm" onClick={() => setDeleteBucketId(bucket.id)}>
                       <Trash2 className="h-4 w-4 text-destructive" />
@@ -364,7 +346,41 @@ export default function StorageSettingsPage() {
                   </TableCell>
                 </TableRow>
               ))}
-              {ossBuckets?.length === 0 && (
+              {/* 阿里云上未关联的 Bucket */}
+              {allBuckets?.unlinked.map((rb) => (
+                <TableRow key={`remote-${rb.name}`} className="opacity-70">
+                  <TableCell className="font-medium">{rb.name}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{rb.ossConfigName}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">未关联</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-muted-foreground">-</span>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-muted-foreground">-</span>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        linkBucketMutation.mutate({
+                          name: rb.name,
+                          ossConfigId: rb.ossConfigId,
+                        });
+                      }}
+                      disabled={linkBucketMutation.isPending}
+                    >
+                      <Link className="mr-1 h-3.5 w-3.5" />
+                      关联
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {!allBuckets?.linked.length && !allBuckets?.unlinked.length && (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                     暂无 Bucket
@@ -453,142 +469,75 @@ export default function StorageSettingsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ─── Bucket 添加对话框（关联已有 / 新建） ─── */}
+      {/* ─── 新建 Bucket 对话框 ─── */}
       <Dialog open={bucketDialogOpen} onOpenChange={(open) => { if (!open) closeBucketDialog(); }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>添加 Bucket</DialogTitle>
+            <DialogTitle>新建 Bucket</DialogTitle>
+            <DialogDescription>
+              在阿里云上创建新的 Bucket，如需关联已有 Bucket 请使用列表中的「关联」按钮
+            </DialogDescription>
           </DialogHeader>
-
-          {/* 先选 OSS 配置，两种模式共用 */}
-          <div>
-            <Label>关联 OSS 配置</Label>
-            <Select
-              value={bucketForm.ossConfigId}
-              onValueChange={(val) => setBucketForm({ ...emptyBucketForm, ossConfigId: val })}
-            >
-              <SelectTrigger className="mt-1 w-full">
-                <SelectValue placeholder="选择 OSS 配置" />
-              </SelectTrigger>
-              <SelectContent>
-                {ossConfigs?.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name} - {c.provider} ({c.region})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="space-y-4">
+            <div>
+              <Label>关联 OSS 配置</Label>
+              <Select
+                value={bucketForm.ossConfigId}
+                onValueChange={(val) => setBucketForm({ ...bucketForm, ossConfigId: val })}
+              >
+                <SelectTrigger className="mt-1 w-full">
+                  <SelectValue placeholder="选择 OSS 配置" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ossConfigs?.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name} - {c.provider} ({c.region})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Bucket 名称</Label>
+              <Input
+                value={bucketForm.name}
+                onChange={(e) =>
+                  setBucketForm({ ...bucketForm, name: e.target.value.toLowerCase() })
+                }
+                placeholder="例如：my-video-bucket"
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                仅允许小写字母、数字和连字符（-），3-63 个字符，不能以连字符开头或结尾
+              </p>
+              {bucketForm.name && validateBucketName(bucketForm.name) && (
+                <p className="text-xs text-destructive mt-1">
+                  {validateBucketName(bucketForm.name)}
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                id="create-bucket-default"
+                checked={bucketForm.isDefault}
+                onCheckedChange={(checked) => setBucketForm({ ...bucketForm, isDefault: checked })}
+              />
+              <Label htmlFor="create-bucket-default">设为默认 Bucket</Label>
+            </div>
           </div>
-
-          {bucketForm.ossConfigId && (
-            <Tabs value={bucketTab} onValueChange={setBucketTab} className="mt-2">
-              <TabsList className="w-full">
-                <TabsTrigger value="link" className="flex-1">
-                  <Link className="mr-1.5 h-3.5 w-3.5" />
-                  关联已有 Bucket
-                </TabsTrigger>
-                <TabsTrigger value="create" className="flex-1">
-                  <Cloud className="mr-1.5 h-3.5 w-3.5" />
-                  新建 Bucket
-                </TabsTrigger>
-              </TabsList>
-
-              {/* ─── 关联已有 ─── */}
-              <TabsContent value="link" className="space-y-4 mt-4">
-                <div>
-                  <Label>选择阿里云上的 Bucket</Label>
-                  {remoteBucketsLoading ? (
-                    <Skeleton className="h-10 w-full mt-1" />
-                  ) : availableRemoteBuckets && availableRemoteBuckets.length > 0 ? (
-                    <Select
-                      value={bucketForm.name}
-                      onValueChange={(val) => setBucketForm({ ...bucketForm, name: val })}
-                    >
-                      <SelectTrigger className="mt-1 w-full">
-                        <SelectValue placeholder="选择 Bucket" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableRemoteBuckets.map((rb) => (
-                          <SelectItem key={rb.name} value={rb.name}>
-                            {rb.name}
-                            <span className="ml-2 text-muted-foreground text-xs">
-                              ({rb.region})
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <p className="text-sm text-muted-foreground mt-2">
-                      {remoteBuckets ? '没有可关联的 Bucket（全部已关联或账号下无 Bucket）' : '加载失败'}
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id="link-bucket-default"
-                    checked={bucketForm.isDefault}
-                    onCheckedChange={(checked) => setBucketForm({ ...bucketForm, isDefault: checked })}
-                  />
-                  <Label htmlFor="link-bucket-default">设为默认 Bucket</Label>
-                </div>
-              </TabsContent>
-
-              {/* ─── 新建 ─── */}
-              <TabsContent value="create" className="space-y-4 mt-4">
-                <div>
-                  <Label>Bucket 名称</Label>
-                  <Input
-                    value={bucketForm.name}
-                    onChange={(e) =>
-                      setBucketForm({ ...bucketForm, name: e.target.value.toLowerCase() })
-                    }
-                    placeholder="例如：my-video-bucket"
-                    className="mt-1"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    仅允许小写字母、数字和连字符（-），3-63 个字符，不能以连字符开头或结尾
-                  </p>
-                  {bucketForm.name && validateBucketName(bucketForm.name) && (
-                    <p className="text-xs text-destructive mt-1">
-                      {validateBucketName(bucketForm.name)}
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id="create-bucket-default"
-                    checked={bucketForm.isDefault}
-                    onCheckedChange={(checked) => setBucketForm({ ...bucketForm, isDefault: checked })}
-                  />
-                  <Label htmlFor="create-bucket-default">设为默认 Bucket</Label>
-                </div>
-              </TabsContent>
-            </Tabs>
-          )}
-
           <DialogFooter>
             <Button variant="outline" onClick={closeBucketDialog}>取消</Button>
-            {bucketTab === 'link' ? (
-              <Button
-                onClick={handleBucketLink}
-                disabled={bucketPending || !bucketForm.name || !bucketForm.ossConfigId}
-              >
-                {bucketPending ? '关联中...' : '关联'}
-              </Button>
-            ) : (
-              <Button
-                onClick={handleBucketCreate}
-                disabled={
-                  bucketPending ||
-                  !bucketForm.name ||
-                  !bucketForm.ossConfigId ||
-                  !!validateBucketName(bucketForm.name)
-                }
-              >
-                {bucketPending ? '创建中...' : '创建'}
-              </Button>
-            )}
+            <Button
+              onClick={handleBucketCreate}
+              disabled={
+                createBucketMutation.isPending ||
+                !bucketForm.name ||
+                !bucketForm.ossConfigId ||
+                !!validateBucketName(bucketForm.name)
+              }
+            >
+              {createBucketMutation.isPending ? '创建中...' : '创建'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
