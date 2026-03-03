@@ -23,6 +23,8 @@ import { join } from 'path';
       isGlobal: true,
       // .env 位于 monorepo 根目录；编译后 __dirname = dist/，需向上 3 层
       envFilePath: join(__dirname, '../../../.env'),
+      // 容器环境中由 K8s ConfigMap/Secret 注入环境变量，不需要 .env 文件
+      ignoreEnvFile: !!process.env.KUBERNETES_SERVICE_HOST,
     }),
     BullModule.forRoot({
       redis: {

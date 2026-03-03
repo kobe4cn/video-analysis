@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: video-analysis-config
+  namespace: video-analysis
+data:
+  NODE_ENV: "production"
+  # ─── Redis（使用阿里云 Redis 实例时替换为实际地址） ───
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+  # ─── JWT 过期时间 ───
+  JWT_EXPIRATION: "15m"
+  JWT_REFRESH_EXPIRATION: "7d"
+  # ─── CORS（替换为实际域名） ───
+  CORS_ORIGIN: "https://your-domain.com"

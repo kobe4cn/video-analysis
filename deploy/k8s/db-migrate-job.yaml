@@ -1,0 +1,32 @@
+# 数据库迁移 Job：首次部署或 Schema 变更时执行
+# kubectl apply -f deploy/k8s/db-migrate-job.yaml
+# kubectl logs -f job/db-migrate -n video-analysis
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migrate
+  namespace: video-analysis
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      containers:
+        - name: migrate
+          # 使用 server 镜像，其中包含 Prisma CLI 和 schema
+          image: IMAGE_PLACEHOLDER
+          workingDir: /app
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Running database migration..."
+              npx prisma db push --schema=prisma/schema.prisma --skip-generate
+              echo "Running database seed..."
+              npx tsx prisma/seed.ts
+              echo "Database initialization completed."
+          envFrom:
+            - configMapRef:
+                name: video-analysis-config
+            - secretRef:
+                name: video-analysis-secret
+      restartPolicy: Never

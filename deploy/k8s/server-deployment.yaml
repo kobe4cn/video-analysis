@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server
+  namespace: video-analysis
+  labels:
+    app: server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: server
+  template:
+    metadata:
+      labels:
+        app: server
+    spec:
+      containers:
+        - name: server
+          # 部署时由 CI/CD 替换为实际 ACR 镜像地址和 tag
+          image: IMAGE_PLACEHOLDER
+          ports:
+            - containerPort: 3001
+          envFrom:
+            - configMapRef:
+                name: video-analysis-config
+            - secretRef:
+                name: video-analysis-secret
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          # 就绪探针：Pod 可接收流量前必须通过
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 3001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          # 存活探针：持续检测进程是否健康
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 3001
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: server-service
+  namespace: video-analysis
+spec:
+  selector:
+    app: server
+  ports:
+    - port: 3001
+      targetPort: 3001
+  type: ClusterIP

@@ -1,0 +1,81 @@
+# 部署流水线：推送到 main 分支时自动构建镜像并部署到阿里云 ACK
+#
+# 所需 GitHub Secrets：
+#   ACR_REGISTRY      - ACR 地址，如 registry.cn-shanghai.aliyuncs.com/your-namespace
+#   ACR_USERNAME       - ACR 登录用户名
+#   ACR_PASSWORD       - ACR 登录密码
+#   KUBE_CONFIG        - ACK kubeconfig 内容（base64 编码）
+#   NEXT_PUBLIC_API_URL - 生产环境 API 地址，如 https://your-domain.com/api
+
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  SERVER_IMAGE: ${{ secrets.ACR_REGISTRY }}/video-analysis-server
+  WEB_IMAGE: ${{ secrets.ACR_REGISTRY }}/video-analysis-web
+  K8S_NAMESPACE: video-analysis
+
+jobs:
+  build-and-push:
+    name: Build & Push Images
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: meta
+        run: echo "tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Login to Alibaba Cloud ACR
+        run: docker login -u ${{ secrets.ACR_USERNAME }} -p ${{ secrets.ACR_PASSWORD }} ${{ secrets.ACR_REGISTRY }}
+
+      - name: Build & push server image
+        run: |
+          docker build -f apps/server/Dockerfile \
+            -t ${{ env.SERVER_IMAGE }}:${{ steps.meta.outputs.tag }} \
+            -t ${{ env.SERVER_IMAGE }}:latest \
+            .
+          docker push ${{ env.SERVER_IMAGE }}:${{ steps.meta.outputs.tag }}
+          docker push ${{ env.SERVER_IMAGE }}:latest
+
+      - name: Build & push web image
+        run: |
+          docker build -f apps/web/Dockerfile \
+            --build-arg NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }} \
+            -t ${{ env.WEB_IMAGE }}:${{ steps.meta.outputs.tag }} \
+            -t ${{ env.WEB_IMAGE }}:latest \
+            .
+          docker push ${{ env.WEB_IMAGE }}:${{ steps.meta.outputs.tag }}
+          docker push ${{ env.WEB_IMAGE }}:latest
+
+  deploy:
+    name: Deploy to ACK
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure kubectl
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+
+      - name: Update server deployment
+        run: |
+          kubectl set image deployment/server \
+            server=${{ env.SERVER_IMAGE }}:${{ needs.build-and-push.outputs.image_tag }} \
+            -n ${{ env.K8S_NAMESPACE }}
+
+      - name: Update web deployment
+        run: |
+          kubectl set image deployment/web \
+            web=${{ env.WEB_IMAGE }}:${{ needs.build-and-push.outputs.image_tag }} \
+            -n ${{ env.K8S_NAMESPACE }}
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/server -n ${{ env.K8S_NAMESPACE }} --timeout=300s
+          kubectl rollout status deployment/web -n ${{ env.K8S_NAMESPACE }} --timeout=300s
