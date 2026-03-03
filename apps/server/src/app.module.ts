@@ -1,6 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import { PrismaModule } from './common/prisma.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
+import { RolesGuard } from './modules/auth/guards/roles.guard';
 import { join } from 'path';
 
 @Module({
@@ -11,6 +15,13 @@ import { join } from 'path';
       envFilePath: join(__dirname, '../../../../.env'),
     }),
     PrismaModule,
+    AuthModule,
+  ],
+  providers: [
+    // 全局启用 JWT 认证，未标注 @Public() 的端点默认需要登录
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    // 全局启用角色守卫，配合 @Roles() 装饰器进行权限控制
+    { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
 export class AppModule {}
