@@ -9,6 +9,14 @@ export class OssService {
 
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * 数据库中 region 可能存为 "cn-shanghai" 或 "oss-cn-shanghai"，
+   * ali-oss SDK 要求 "oss-" 前缀才能正确拼接 endpoint。
+   */
+  private normalizeRegion(region: string): string {
+    return region.startsWith('oss-') ? region : `oss-${region}`;
+  }
+
   // 每次操作动态构建 OSS Client，确保始终使用数据库中最新的配置
   private async getClient(
     bucketId: string,
@@ -19,10 +27,11 @@ export class OssService {
     });
 
     const client = new OSS({
-      region: bucket.ossConfig.region,
+      region: this.normalizeRegion(bucket.ossConfig.region),
       accessKeyId: bucket.ossConfig.accessKeyId,
       accessKeySecret: bucket.ossConfig.accessKeySecret,
       bucket: bucket.name,
+      secure: true,
     });
 
     return { client, bucket, config: bucket.ossConfig };
@@ -63,7 +72,8 @@ export class OssService {
       where: { id: bucketId },
       include: { ossConfig: true },
     });
-    return `https://${bucket.name}.${bucket.ossConfig.region}.aliyuncs.com/${ossKey}`;
+    const region = this.normalizeRegion(bucket.ossConfig.region);
+    return `https://${bucket.name}.${region}.aliyuncs.com/${ossKey}`;
   }
 
   async deleteObject(bucketId: string, ossKey: string): Promise<void> {
@@ -83,9 +93,10 @@ export class OssService {
     });
 
     return new OSS({
-      region: config.region,
+      region: this.normalizeRegion(config.region),
       accessKeyId: config.accessKeyId,
       accessKeySecret: config.accessKeySecret,
+      secure: true,
     });
   }
 
