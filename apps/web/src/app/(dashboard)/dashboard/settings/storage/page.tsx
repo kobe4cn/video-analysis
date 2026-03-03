@@ -25,6 +25,7 @@ import { toast } from 'sonner';
 
 interface OssConfig {
   id: string;
+  name: string;
   provider: string;
   accessKeyId: string;
   accessKeySecret: string;
@@ -43,7 +44,7 @@ interface OssBucket {
 
 // ─── 表单初始值 ───
 
-const emptyConfigForm = { provider: '', accessKeyId: '', accessKeySecret: '', region: '' };
+const emptyConfigForm = { name: '', provider: '', accessKeyId: '', accessKeySecret: '', region: '' };
 const emptyBucketForm = { name: '', ossConfigId: '', domain: '', isDefault: false };
 
 export default function StorageSettingsPage() {
@@ -158,6 +159,7 @@ export default function StorageSettingsPage() {
   function openEditConfig(config: OssConfig) {
     setEditingConfig(config);
     setConfigForm({
+      name: config.name,
       provider: config.provider,
       accessKeyId: config.accessKeyId,
       // 编辑时不回显完整 Secret，留空表示不修改
@@ -170,6 +172,7 @@ export default function StorageSettingsPage() {
   function handleConfigSubmit() {
     if (editingConfig) {
       const body: Record<string, string> = {};
+      if (configForm.name) body.name = configForm.name;
       if (configForm.provider) body.provider = configForm.provider;
       if (configForm.accessKeyId) body.accessKeyId = configForm.accessKeyId;
       if (configForm.accessKeySecret) body.accessKeySecret = configForm.accessKeySecret;
@@ -235,7 +238,7 @@ export default function StorageSettingsPage() {
   /** 根据 ossConfigId 查找对应配置的 provider 名称 */
   function getConfigLabel(ossConfigId: string): string {
     const config = ossConfigs?.find((c) => c.id === ossConfigId);
-    return config ? `${config.provider} (${config.region})` : ossConfigId;
+    return config ? `${config.name} (${config.region})` : ossConfigId;
   }
 
   const configPending = createConfigMutation.isPending || updateConfigMutation.isPending;
@@ -263,9 +266,9 @@ export default function StorageSettingsPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>名称</TableHead>
                 <TableHead>Provider</TableHead>
                 <TableHead>Access Key ID</TableHead>
-                <TableHead>Access Key Secret</TableHead>
                 <TableHead>Region</TableHead>
                 <TableHead>状态</TableHead>
                 <TableHead className="text-right">操作</TableHead>
@@ -274,9 +277,9 @@ export default function StorageSettingsPage() {
             <TableBody>
               {ossConfigs?.map((config) => (
                 <TableRow key={config.id}>
-                  <TableCell className="font-medium">{config.provider}</TableCell>
+                  <TableCell className="font-medium">{config.name}</TableCell>
+                  <TableCell>{config.provider}</TableCell>
                   <TableCell className="font-mono text-xs">{config.accessKeyId}</TableCell>
-                  <TableCell className="font-mono text-xs">{config.accessKeySecret}</TableCell>
                   <TableCell>{config.region}</TableCell>
                   <TableCell>
                     <Switch
@@ -385,6 +388,15 @@ export default function StorageSettingsPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
+              <Label>名称</Label>
+              <Input
+                value={configForm.name}
+                onChange={(e) => setConfigForm({ ...configForm, name: e.target.value })}
+                placeholder="例如：阿里云主账号"
+                className="mt-1"
+              />
+            </div>
+            <div>
               <Label>Provider</Label>
               <Select
                 value={configForm.provider}
@@ -436,7 +448,7 @@ export default function StorageSettingsPage() {
               onClick={handleConfigSubmit}
               disabled={
                 configPending ||
-                (!editingConfig && (!configForm.provider || !configForm.accessKeyId || !configForm.accessKeySecret || !configForm.region))
+                (!editingConfig && (!configForm.name || !configForm.provider || !configForm.accessKeyId || !configForm.accessKeySecret || !configForm.region))
               }
             >
               {configPending ? '保存中...' : '保存'}
