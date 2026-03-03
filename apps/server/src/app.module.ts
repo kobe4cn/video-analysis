@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { PrismaModule } from './common/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { UserModule } from './modules/user/user.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
 import { join } from 'path';
@@ -16,6 +17,7 @@ import { join } from 'path';
     }),
     PrismaModule,
     AuthModule,
+    UserModule,
   ],
   providers: [
     // 全局启用 JWT 认证，未标注 @Public() 的端点默认需要登录
