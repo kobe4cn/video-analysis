@@ -4,8 +4,10 @@ import { APP_GUARD } from '@nestjs/core';
 import { PrismaModule } from './common/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
+import { ModelModule } from './modules/model/model.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
+import { StorageModule } from './modules/storage/storage.module';
 import { join } from 'path';
 
 @Module({
@@ -18,6 +20,8 @@ import { join } from 'path';
     PrismaModule,
     AuthModule,
     UserModule,
+    ModelModule,
+    StorageModule,
   ],
   providers: [
     // 全局启用 JWT 认证，未标注 @Public() 的端点默认需要登录
