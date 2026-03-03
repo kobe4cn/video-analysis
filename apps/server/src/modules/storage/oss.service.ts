@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma.service';
 import OSS from 'ali-oss';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class OssService {
+  private readonly logger = new Logger(OssService.name);
+
   constructor(private prisma: PrismaService) {}
 
   // 每次操作动态构建 OSS Client，确保始终使用数据库中最新的配置
@@ -67,5 +69,41 @@ export class OssService {
   async deleteObject(bucketId: string, ossKey: string): Promise<void> {
     const { client } = await this.getClient(bucketId);
     await client.delete(ossKey);
+  }
+
+  // ─── Bucket 管理操作 ───
+
+  /**
+   * 根据 OssConfig ID 构建不绑定任何 Bucket 的 OSS Client。
+   * 用于 Bucket 级别的管理操作（创建/删除），此时 Bucket 可能尚不存在。
+   */
+  async getClientByConfigId(configId: string): Promise<OSS> {
+    const config = await this.prisma.ossConfig.findUniqueOrThrow({
+      where: { id: configId },
+    });
+
+    return new OSS({
+      region: config.region,
+      accessKeyId: config.accessKeyId,
+      accessKeySecret: config.accessKeySecret,
+    });
+  }
+
+  /** 在阿里云上创建 Bucket 并设置 public-read ACL */
+  async createBucket(configId: string, bucketName: string): Promise<void> {
+    const client = await this.getClientByConfigId(configId);
+
+    await client.putBucket(bucketName);
+    this.logger.log(`Bucket "${bucketName}" 已在阿里云上创建`);
+
+    await client.putBucketACL(bucketName, 'public-read');
+    this.logger.log(`Bucket "${bucketName}" ACL 已设置为 public-read`);
+  }
+
+  /** 在阿里云上删除 Bucket（Bucket 必须为空，否则阿里云会拒绝） */
+  async removeBucket(configId: string, bucketName: string): Promise<void> {
+    const client = await this.getClientByConfigId(configId);
+    await client.deleteBucket(bucketName);
+    this.logger.log(`Bucket "${bucketName}" 已从阿里云删除`);
   }
 }

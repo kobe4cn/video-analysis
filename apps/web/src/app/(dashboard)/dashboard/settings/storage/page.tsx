@@ -48,6 +48,18 @@ interface OssBucket {
 const emptyConfigForm = { name: '', provider: '', accessKeyId: '', accessKeySecret: '', region: '' };
 const emptyBucketForm = { name: '', ossConfigId: '', isDefault: false };
 
+const BUCKET_NAME_REGEX = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
+
+function validateBucketName(name: string): string | null {
+  if (!name) return null;
+  if (name.length < 3) return '名称至少 3 个字符';
+  if (name.length > 63) return '名称最多 63 个字符';
+  if (!BUCKET_NAME_REGEX.test(name)) {
+    return '仅允许小写字母、数字和连字符，不能以连字符开头或结尾';
+  }
+  return null;
+}
+
 export default function StorageSettingsPage() {
   const queryClient = useQueryClient();
 
@@ -406,10 +418,20 @@ export default function StorageSettingsPage() {
               <Label>Bucket 名称</Label>
               <Input
                 value={bucketForm.name}
-                onChange={(e) => setBucketForm({ ...bucketForm, name: e.target.value })}
-                placeholder="输入 Bucket 名称"
+                onChange={(e) =>
+                  setBucketForm({ ...bucketForm, name: e.target.value.toLowerCase() })
+                }
+                placeholder="例如：my-video-bucket"
                 className="mt-1"
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                仅允许小写字母、数字和连字符（-），3-63 个字符，不能以连字符开头或结尾
+              </p>
+              {bucketForm.name && validateBucketName(bucketForm.name) && (
+                <p className="text-xs text-destructive mt-1">
+                  {validateBucketName(bucketForm.name)}
+                </p>
+              )}
             </div>
             <div>
               <Label>关联 OSS 配置</Label>
@@ -444,7 +466,9 @@ export default function StorageSettingsPage() {
               onClick={handleBucketSubmit}
               disabled={
                 bucketPending ||
-                !bucketForm.name || !bucketForm.ossConfigId
+                !bucketForm.name ||
+                !bucketForm.ossConfigId ||
+                !!validateBucketName(bucketForm.name)
               }
             >
               {bucketPending ? '保存中...' : '保存'}
@@ -481,7 +505,7 @@ export default function StorageSettingsPage() {
           <DialogHeader>
             <DialogTitle>确认删除</DialogTitle>
             <DialogDescription>
-              删除后无法恢复，确定继续？
+              此操作将同时删除阿里云上的 Bucket，删除后无法恢复。确定继续？
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

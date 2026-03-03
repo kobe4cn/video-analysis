@@ -22,6 +22,18 @@ declare module 'ali-oss' {
     delete(name: string): Promise<{ res: any }>;
     put(name: string, file: any, options?: any): Promise<any>;
     get(name: string, file?: any, options?: any): Promise<any>;
+
+    // Bucket 级别操作
+    putBucket(
+      name: string,
+      options?: { StorageClass?: string; timeout?: number },
+    ): Promise<{ bucket: string; res: any }>;
+    deleteBucket(name: string): Promise<{ res: any }>;
+    putBucketACL(
+      name: string,
+      acl: 'private' | 'public-read' | 'public-read-write',
+    ): Promise<any>;
+    getBucketInfo(name: string): Promise<{ bucket: any; res: any }>;
   }
 
   export default OSS;
