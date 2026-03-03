@@ -1,9 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bull';
+import type { Queue } from 'bull';
 import { PrismaService } from '../../common/prisma.service';
 
 @Injectable()
 export class ReportService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @InjectQueue('video-analysis') private analysisQueue: Queue,
+  ) {}
 
   // 供任务处理器和报告修订共用的核心方法，负责首次创建或追加新版本
   async createOrUpdateReport(params: {
@@ -127,5 +132,76 @@ export class ReportService {
     });
     if (!version) throw new NotFoundException('版本不存在');
     return version;
+  }
+
+  /** 修正报告：基于原报告的视频、skill、model 创建新的分析任务，附带额外要求 */
+  async revise(reportId: string, additionalRequirements: string, userId: string) {
+    const report = await this.prisma.report.findUnique({
+      where: { id: reportId },
+      include: { video: true },
+    });
+    if (!report) throw new NotFoundException('报告不存在');
+
+    // 从最近一次版本记录中获取原始 skill 和 model，以保持分析一致性
+    const latestVersion = await this.prisma.reportVersion.findFirst({
+      where: { reportId },
+      orderBy: { version: 'desc' },
+    });
+
+    // 若没有版本记录（仅 v1），则从关联的 TaskVideo → Task 中获取
+    let skillId = latestVersion?.skillId;
+    let modelId = latestVersion?.modelId;
+
+    if (!skillId || !modelId) {
+      const taskVideo = await this.prisma.taskVideo.findFirst({
+        where: { reportId },
+        include: { task: true },
+        orderBy: { completedAt: 'desc' },
+      });
+      if (taskVideo) {
+        skillId = skillId || taskVideo.task.skillId;
+        modelId = modelId || taskVideo.task.modelId;
+      }
+    }
+
+    if (!skillId || !modelId) {
+      throw new NotFoundException('无法确定原始分析使用的 Skill 或 Model');
+    }
+
+    // 获取 skill 内容用于组装修正 prompt
+    const skill = await this.prisma.skill.findUniqueOrThrow({
+      where: { id: skillId },
+    });
+
+    // 创建修正任务，复用原始 skill 和 model
+    const task = await this.prisma.$transaction(async (tx) => {
+      const t = await tx.task.create({
+        data: {
+          name: `修正报告: ${report.video.title}`,
+          skillId,
+          modelId,
+          createdBy: userId,
+        },
+      });
+
+      await tx.taskVideo.create({
+        data: {
+          taskId: t.id,
+          videoId: report.videoId,
+        },
+      });
+
+      return t;
+    });
+
+    // 组装完整的修正 prompt：当前报告 + 用户额外要求 + skill 报告生成要求
+    const revisionPrompt = `请基于当前的报告内容：\n${report.content}\n\n结合新的要求：${additionalRequirements}\n\n和报告生成要求：\n${skill.content}\n\n对于视频的内容重新进行分析和修正报告。`;
+
+    await this.analysisQueue.add('analyze', {
+      taskId: task.id,
+      revisionPrompt,
+    });
+
+    return { taskId: task.id, status: 'PENDING' };
   }
 }

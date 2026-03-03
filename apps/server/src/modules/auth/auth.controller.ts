@@ -3,6 +3,7 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RefreshDto } from './dto/refresh.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { Public } from './decorators/public.decorator';
 import { Roles } from './decorators/roles.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -27,6 +28,14 @@ export class AuthController {
   @Post('register')
   async register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
+  }
+
+  @Post('change-password')
+  async changePassword(
+    @Body() dto: ChangePasswordDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.authService.changePassword(userId, dto.oldPassword, dto.newPassword);
   }
 
   @Get('me')

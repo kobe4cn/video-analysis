@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
@@ -12,11 +12,13 @@ import { SidebarNav } from '@/components/sidebar-nav';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAuth } from '@/hooks/use-auth';
+import { ChangePasswordDialog } from '@/components/change-password-dialog';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const { logout } = useAuth();
+  const [pwdDialogOpen, setPwdDialogOpen] = useState(false);
 
   // 未登录时重定向到登录页
   useEffect(() => {
@@ -58,6 +60,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <DropdownMenuItem disabled className="text-xs text-muted-foreground">
                   {user.email} ({user.role})
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setPwdDialogOpen(true)}>修改密码</DropdownMenuItem>
                 <DropdownMenuItem onClick={logout}>退出登录</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -65,6 +68,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
         <div className="flex-1 p-6">{children}</div>
       </SidebarInset>
+      <ChangePasswordDialog open={pwdDialogOpen} onOpenChange={setPwdDialogOpen} />
     </SidebarProvider>
   );
 }

@@ -19,8 +19,8 @@ export class TaskProcessor {
 
   /** 逐个处理任务中的每个视频分析，失败的视频不会阻塞后续视频的处理 */
   @Process('analyze')
-  async handleAnalysis(job: Job<{ taskId: string }>) {
-    const { taskId } = job.data;
+  async handleAnalysis(job: Job<{ taskId: string; revisionPrompt?: string }>) {
+    const { taskId, revisionPrompt } = job.data;
     this.logger.log(`Processing task: ${taskId}`);
 
     await this.prisma.task.update({
@@ -54,11 +54,11 @@ export class TaskProcessor {
           currentVideoTitle: taskVideo.video.title,
         });
 
-        // 调用 LLM 分析视频，skill.content 作为分析 prompt
+        // 修正报告时使用完整的修正 prompt（包含当前报告 + 用户要求 + skill 要求），普通任务直接用 skill 内容
         const content = await this.llmService.analyzeVideo({
           modelId: task.modelId,
           videoUrl: taskVideo.video.ossUrl,
-          prompt: task.skill.content,
+          prompt: revisionPrompt || task.skill.content,
         });
 
         const report = await this.reportService.createOrUpdateReport({
@@ -66,6 +66,12 @@ export class TaskProcessor {
           content,
           skillId: task.skillId,
           modelId: task.modelId,
+        });
+
+        // 报告修正场景下，同一 Report 可能已被旧 TaskVideo 关联，需先解除以满足 unique 约束
+        await this.prisma.taskVideo.updateMany({
+          where: { reportId: report.id },
+          data: { reportId: null },
         });
 
         await this.prisma.taskVideo.update({

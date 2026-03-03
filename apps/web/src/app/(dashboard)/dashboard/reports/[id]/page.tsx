@@ -48,7 +48,7 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
   const reviseMutation = useMutation({
     mutationFn: (body: { additionalRequirements: string }) => apiClient.post(`/reports/${id}/revise`, body),
     onSuccess: () => {
-      toast.success('报告修复请求已提交，请在解析任务中查看进度');
+      toast.success('修正任务已创建，请在解析任务中查看进度');
       setReviseOpen(false);
       setAdditionalRequirements('');
     },
@@ -99,10 +99,10 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
           </div>
         )}
 
-        {/* 仅 OPERATOR 及以上角色可修复报告，且仅在查看最新版本时显示 */}
+        {/* 仅 OPERATOR 及以上角色可修正报告，且仅在查看最新版本时显示 */}
         {hasRole('OPERATOR') && !selectedVersionId && (
           <Button variant="outline" onClick={() => setReviseOpen(true)}>
-            <RefreshCw className="mr-2 h-4 w-4" />修复报告
+            <RefreshCw className="mr-2 h-4 w-4" />修正报告
           </Button>
         )}
       </div>
@@ -116,11 +116,11 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
         </CardContent>
       </Card>
 
-      {/* 修复报告对话框：用户提交额外要求后触发后端重新分析 */}
+      {/* 修正报告对话框：用户提交额外要求后触发后端重新分析 */}
       <Dialog open={reviseOpen} onOpenChange={setReviseOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>修复报告</DialogTitle>
+            <DialogTitle>修正报告</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
@@ -143,7 +143,7 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
               onClick={() => reviseMutation.mutate({ additionalRequirements })}
               disabled={!additionalRequirements.trim() || reviseMutation.isPending}
             >
-              {reviseMutation.isPending ? '提交中...' : '提交修复'}
+              {reviseMutation.isPending ? '提交中...' : '提交修正'}
             </Button>
           </DialogFooter>
         </DialogContent>

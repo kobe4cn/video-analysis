@@ -2,6 +2,7 @@ import { Controller, Get, Post, Param, Body } from '@nestjs/common';
 import { ReportService } from './report.service';
 import { ReviseReportDto } from './dto/revise-report.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @Controller()
 export class ReportController {
@@ -27,14 +28,13 @@ export class ReportController {
     return this.reportService.findVersion(id, versionId);
   }
 
-  // 报告修订：实际的异步处理将在 Task 模块的 Bull 队列中实现（Task 14）
   @Post('reports/:id/revise')
   @Roles('OPERATOR')
-  revise(@Param('id') id: string, @Body() dto: ReviseReportDto) {
-    return {
-      message: '报告修复请求已提交',
-      reportId: id,
-      additionalRequirements: dto.additionalRequirements,
-    };
+  revise(
+    @Param('id') id: string,
+    @Body() dto: ReviseReportDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.reportService.revise(id, dto.additionalRequirements, userId);
   }
 }
