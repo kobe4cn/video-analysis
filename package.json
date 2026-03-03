@@ -1,0 +1,17 @@
+{
+  "name": "xiaohongshuvideo",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "db:generate": "pnpm --filter @repo/prisma generate",
+    "db:migrate": "pnpm --filter @repo/prisma migrate",
+    "db:push": "pnpm --filter @repo/prisma push",
+    "db:seed": "pnpm --filter @repo/prisma seed"
+  },
+  "devDependencies": {
+    "turbo": "^2"
+  },
+  "packageManager": "pnpm@9.15.0"
+}
