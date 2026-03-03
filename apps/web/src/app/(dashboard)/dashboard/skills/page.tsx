@@ -26,9 +26,11 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Pencil, Trash2, History } from 'lucide-react';
+import { Plus, Pencil, Trash2, History, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { EmptyState } from '@/components/empty-state';
+import { QueryError } from '@/components/query-error';
 
 interface SkillItem {
   id: string;
@@ -57,7 +59,7 @@ export default function SkillsPage() {
   const queryClient = useQueryClient();
   const hasRole = useAuthStore((s) => s.hasRole);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['skills', page, search],
     queryFn: () =>
       apiClient.get<SkillsResponse>(
@@ -115,7 +117,9 @@ export default function SkillsPage() {
         </Button>
       </div>
 
-      {isLoading ? (
+      {isError ? (
+        <QueryError error={error} retry={() => refetch()} />
+      ) : isLoading ? (
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-12 w-full" />
@@ -123,6 +127,7 @@ export default function SkillsPage() {
         </div>
       ) : (
         <>
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -179,16 +184,18 @@ export default function SkillsPage() {
               ))}
               {data?.items?.length === 0 && (
                 <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="text-center text-muted-foreground py-8"
-                  >
-                    暂无 Skill
+                  <TableCell colSpan={6}>
+                    <EmptyState
+                      icon={Sparkles}
+                      title="暂无 Skill"
+                      description="Skill 定义了视频分析时使用的 Prompt 模板"
+                    />
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
+          </div>
 
           {data && data.totalPages > 1 && (
             <div className="flex justify-center gap-2">

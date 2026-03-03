@@ -24,10 +24,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Upload, Download, Trash2, Eye, FileText } from 'lucide-react';
+import { Upload, Download, Trash2, Eye, FileText, Video } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { VideoUploadDialog } from '@/components/video/video-upload-dialog';
+import { EmptyState } from '@/components/empty-state';
+import { QueryError } from '@/components/query-error';
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + ' B';
@@ -65,7 +67,7 @@ export default function VideosPage() {
   const queryClient = useQueryClient();
   const hasRole = useAuthStore((s) => s.hasRole);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['videos', page, search],
     queryFn: () =>
       apiClient.get<VideosResponse>(
@@ -124,7 +126,9 @@ export default function VideosPage() {
         </Button>
       </div>
 
-      {isLoading ? (
+      {isError ? (
+        <QueryError error={error} retry={() => refetch()} />
+      ) : isLoading ? (
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-12 w-full" />
@@ -132,6 +136,7 @@ export default function VideosPage() {
         </div>
       ) : (
         <>
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -193,16 +198,18 @@ export default function VideosPage() {
               ))}
               {data?.items?.length === 0 && (
                 <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="text-center text-muted-foreground py-8"
-                  >
-                    暂无视频
+                  <TableCell colSpan={6}>
+                    <EmptyState
+                      icon={Video}
+                      title="暂无视频"
+                      description="上传视频后即可在此处管理和查看"
+                    />
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
+          </div>
 
           {data && data.totalPages > 1 && (
             <div className="flex justify-center gap-2">

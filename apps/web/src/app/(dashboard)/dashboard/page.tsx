@@ -8,6 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Video, ListTodo, FileText, Sparkles } from 'lucide-react';
 import Link from 'next/link';
+import { QueryError } from '@/components/query-error';
 
 const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   PENDING: { label: '等待中', variant: 'secondary' },
@@ -18,7 +19,7 @@ const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'secondar
 };
 
 export default function DashboardPage() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: () => apiClient.get<any>('/dashboard/stats'),
   });
@@ -30,6 +31,15 @@ export default function DashboardPage() {
         <div className="grid gap-4 md:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32" />)}
         </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold">仪表盘</h1>
+        <QueryError error={error} retry={() => refetch()} />
       </div>
     );
   }

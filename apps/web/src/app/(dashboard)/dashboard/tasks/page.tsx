@@ -9,9 +9,11 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Plus, Eye, XCircle } from 'lucide-react';
+import { Plus, Eye, XCircle, ListTodo } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { EmptyState } from '@/components/empty-state';
+import { QueryError } from '@/components/query-error';
 
 const STATUS_MAP: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   PENDING: { label: '等待中', variant: 'secondary' },
@@ -26,7 +28,7 @@ export default function TasksPage() {
   const [cancelId, setCancelId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['tasks', page],
     queryFn: () => apiClient.get<{ items: any[]; total: number; page: number; pageSize: number; totalPages: number }>(`/tasks?page=${page}&pageSize=20`),
   });
@@ -52,7 +54,9 @@ export default function TasksPage() {
         </Button>
       </div>
 
-      {isLoading ? (
+      {isError ? (
+        <QueryError error={error} retry={() => refetch()} />
+      ) : isLoading ? (
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-12 w-full" />
@@ -60,6 +64,7 @@ export default function TasksPage() {
         </div>
       ) : (
         <>
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -106,13 +111,25 @@ export default function TasksPage() {
               })}
               {data?.items?.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                    暂无任务
+                  <TableCell colSpan={8}>
+                    <EmptyState
+                      icon={ListTodo}
+                      title="暂无解析任务"
+                      description="创建解析任务以开始分析视频内容"
+                      action={
+                        <Button asChild size="sm">
+                          <Link href="/dashboard/tasks/new">
+                            <Plus className="mr-2 h-4 w-4" />创建任务
+                          </Link>
+                        </Button>
+                      }
+                    />
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
+          </div>
 
           {data && data.totalPages > 1 && (
             <div className="flex justify-center gap-2">
