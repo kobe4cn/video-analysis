@@ -15,6 +15,8 @@ import { ReportModule } from './modules/report/report.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { TaskModule } from './modules/task/task.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { LinkVideoModule } from './modules/link-video/link-video.module';
+import { ScraperModule } from './modules/scraper/scraper.module';
 import { join } from 'path';
 
 @Module({
@@ -42,6 +44,8 @@ import { join } from 'path';
     ReportModule,
     NotificationModule,
     TaskModule,
+    ScraperModule,
+    LinkVideoModule,
     DashboardModule,
   ],
   providers: [
