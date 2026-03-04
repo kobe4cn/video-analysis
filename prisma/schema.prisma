@@ -73,13 +73,14 @@ model OssConfig {
 }
 
 model OssBucket {
-  id          String    @id @default(cuid())
+  id          String      @id @default(cuid())
   name        String
   ossConfigId String
-  ossConfig   OssConfig @relation(fields: [ossConfigId], references: [id])
-  isDefault   Boolean   @default(false)
+  ossConfig   OssConfig   @relation(fields: [ossConfigId], references: [id])
+  isDefault   Boolean     @default(false)
   videos      Video[]
-  createdAt   DateTime  @default(now())
+  linkVideos  LinkVideo[]
+  createdAt   DateTime    @default(now())
 }
 
 // ========== 视频管理 ==========
@@ -122,6 +123,10 @@ model LinkVideo {
   author         String?
   videoFileUrl   String?
   coverUrl       String?
+  ossKey         String?
+  ossUrl         String?
+  bucketId       String?
+  bucket         OssBucket?      @relation(fields: [bucketId], references: [id])
   likes          Int?
   collects       Int?
   comments       Int?

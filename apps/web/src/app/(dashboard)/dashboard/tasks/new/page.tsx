@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api-client';
@@ -10,7 +10,14 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, ArrowRight, Check, Video, Sparkles, Bot, FolderOpen, ChevronRight, Link2 } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { ArrowLeft, ArrowRight, Check, Video, Sparkles, Bot, FolderOpen, ChevronRight, Link2, HardDrive } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
 
@@ -46,6 +53,7 @@ export default function CreateTaskPage() {
   const [selectedModel, setSelectedModel] = useState('');
   const [currentFolder, setCurrentFolder] = useState<{ id: string; name: string } | null>(null);
   const [linkText, setLinkText] = useState('');
+  const [selectedBucket, setSelectedBucket] = useState('');
 
   const parsedLinks = useMemo(() => parseUrls(linkText), [linkText]);
 
@@ -64,6 +72,20 @@ export default function CreateTaskPage() {
     },
     enabled: !!currentFolder && taskType === 'VIDEO',
   });
+
+  const { data: bucketsData } = useQuery({
+    queryKey: ['oss-bucket-options'],
+    queryFn: () => apiClient.get<Array<{ id: string; name: string; isDefault: boolean }>>('/oss-buckets/options'),
+    enabled: taskType === 'LINK',
+  });
+
+  // 自动选中默认 Bucket 或第一个可用 Bucket
+  useEffect(() => {
+    if (bucketsData && bucketsData.length > 0 && !selectedBucket) {
+      const defaultB = bucketsData.find((b) => b.isDefault);
+      setSelectedBucket(defaultB?.id || bucketsData[0].id);
+    }
+  }, [bucketsData, selectedBucket]);
 
   const { data: skillsData } = useQuery({
     queryKey: ['all-skills'],
@@ -86,7 +108,7 @@ export default function CreateTaskPage() {
   });
 
   const createLinkMutation = useMutation({
-    mutationFn: (body: { name: string; urls: string[]; skillId: string; modelId: string }) =>
+    mutationFn: (body: { name: string; urls: string[]; skillId: string; modelId: string; bucketId?: string }) =>
       apiClient.post<{ id: string }>('/tasks/link', body),
     onSuccess: (data) => {
       toast.success('链接任务已创建');
@@ -109,6 +131,7 @@ export default function CreateTaskPage() {
         urls: parsedLinks.map((l) => l.url),
         skillId: selectedSkill,
         modelId: selectedModel,
+        bucketId: selectedBucket || undefined,
       });
     } else {
       createMutation.mutate({
@@ -129,7 +152,7 @@ export default function CreateTaskPage() {
 
   const canProceed = () => {
     if (step === 0) return !!taskType;
-    if (step === 1) return taskType === 'LINK' ? parsedLinks.length > 0 : selectedVideos.size > 0;
+    if (step === 1) return taskType === 'LINK' ? parsedLinks.length > 0 && !!selectedBucket : selectedVideos.size > 0;
     if (step === 2) return !!selectedSkill;
     if (step === 3) return !!selectedModel && !!taskName;
     return true;
@@ -222,6 +245,28 @@ export default function CreateTaskPage() {
                 </div>
               </div>
             )}
+            <div>
+              <Label className="flex items-center gap-1">
+                <HardDrive className="h-4 w-4" />视频存储 Bucket
+              </Label>
+              <p className="text-xs text-muted-foreground mb-1">解析后的视频将下载并存储到选中的 OSS Bucket</p>
+              {bucketsData && bucketsData.length > 0 ? (
+                <Select value={selectedBucket} onValueChange={setSelectedBucket}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="选择 Bucket" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {bucketsData.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}{b.isDefault ? '（默认）' : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="text-sm text-destructive mt-1">未配置 OSS Bucket，请先在存储设置中添加</p>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -354,6 +399,9 @@ export default function CreateTaskPage() {
               <span className="text-muted-foreground">{taskType === 'LINK' ? '链接数：' : '选择视频数：'}</span>
               {taskType === 'LINK' ? `${parsedLinks.length} 个` : `${selectedVideos.size} 个`}
             </div>
+            {taskType === 'LINK' && selectedBucket && (
+              <div><span className="text-muted-foreground">存储 Bucket：</span>{bucketsData?.find((b) => b.id === selectedBucket)?.name}</div>
+            )}
             <div><span className="text-muted-foreground">Skill：</span>{skills.find((s: any) => s.id === selectedSkill)?.name}</div>
             <div><span className="text-muted-foreground">模型：</span>{models.find((m: any) => m.id === selectedModel)?.displayName}</div>
           </CardContent>

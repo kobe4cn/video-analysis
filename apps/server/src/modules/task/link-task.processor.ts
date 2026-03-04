@@ -6,6 +6,7 @@ import { LlmService } from '../llm/llm.service';
 import { ReportService } from '../report/report.service';
 import { NotificationGateway } from '../notification/notification.gateway';
 import { ScraperService } from '../scraper/scraper.service';
+import { OssService } from '../storage/oss.service';
 
 @Processor('link-video-analysis')
 export class LinkTaskProcessor {
@@ -17,11 +18,12 @@ export class LinkTaskProcessor {
     private reportService: ReportService,
     private notificationGateway: NotificationGateway,
     private scraperService: ScraperService,
+    private ossService: OssService,
   ) {}
 
   @Process('analyze-links')
-  async handleLinkAnalysis(job: Job<{ taskId: string }>) {
-    const { taskId } = job.data;
+  async handleLinkAnalysis(job: Job<{ taskId: string; bucketId: string }>) {
+    const { taskId, bucketId } = job.data;
     this.logger.log(`Processing link task: ${taskId}`);
 
     await this.prisma.task.update({
@@ -76,7 +78,8 @@ export class LinkTaskProcessor {
           },
         });
 
-        // 阶段 2: 提取 MP4 URL
+        // 阶段 2: 通过 kukutool 提取视频直链
+        this.logger.log(`[${linkVideo.id}] 开始提取视频直链...`);
         const extracted = await this.scraperService.extractVideoFileUrl(linkVideo.url, linkVideo.platform);
 
         await this.prisma.linkVideo.update({
@@ -84,22 +87,54 @@ export class LinkTaskProcessor {
           data: {
             videoFileUrl: extracted.videoFileUrl,
             coverUrl: extracted.coverUrl,
-            status: 'ANALYZING',
           },
         });
 
-        // 阶段 3: AI 分析
+        // 下载视频到 OSS：kukutool 只提取 URL，下载由 OssService 完成
+        let ossVideoUrl: string | null = null;
+        if (extracted.videoFileUrl) {
+          this.logger.log(`[${linkVideo.id}] 开始下载视频并上传到 OSS (bucketId=${bucketId})`);
+          try {
+            const fileName = `${linkVideo.id}_${Date.now()}.mp4`;
+            const { key, ossUrl } = await this.ossService.downloadAndUpload(
+              bucketId,
+              extracted.videoFileUrl,
+              fileName,
+            );
+
+            await this.prisma.linkVideo.update({
+              where: { id: linkVideo.id },
+              data: { ossKey: key, ossUrl, bucketId },
+            });
+            ossVideoUrl = ossUrl;
+            this.logger.log(`[${linkVideo.id}] 视频已持久化到 OSS: ${key}`);
+          } catch (uploadErr) {
+            this.logger.error(
+              `[${linkVideo.id}] 视频下载上传 OSS 失败: ${(uploadErr as Error).message}`,
+            );
+          }
+        } else {
+          this.logger.warn(`[${linkVideo.id}] kukutool 未能提取到视频直链，将使用原始页面 URL 进行分析`);
+        }
+
+        await this.prisma.linkVideo.update({
+          where: { id: linkVideo.id },
+          data: { status: 'ANALYZING' },
+        });
+
+        // 阶段 3: AI 分析（优先使用 OSS URL，回退到提取的原始 URL）
         const platformContext = this.buildPlatformContext(scrapedData, linkVideo.platform);
+        const videoUrlForAnalysis = ossVideoUrl || extracted.videoFileUrl;
         let reportContent: string;
 
-        if (extracted.videoFileUrl) {
+        if (videoUrlForAnalysis) {
           reportContent = await this.llmService.analyzeVideo({
             modelId: task.modelId,
-            videoUrl: extracted.videoFileUrl,
+            videoUrl: videoUrlForAnalysis,
             prompt: `${task.skill.content}\n\n## 平台数据参考\n${platformContext}`,
           });
         } else {
-          // 降级：无视频直链时基于页面 URL 和平台数据分析
+          // 降级：无视频直链时仅基于平台数据分析
           reportContent = await this.llmService.analyzeVideo({
             modelId: task.modelId,
             videoUrl: linkVideo.url,

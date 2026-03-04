@@ -2,6 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma.service';
 import OSS from 'ali-oss';
 import { v4 as uuidv4 } from 'uuid';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+import { execFile } from 'child_process';
 
 @Injectable()
 export class OssService {
@@ -92,6 +96,74 @@ export class OssService {
     this.logger.log(`文件已上传到 OSS: ${key}`);
     const ossUrl = await this.getPublicUrl(bucketId, key);
     return { key, ossUrl };
+  }
+
+  /**
+   * 从远程 URL 下载视频文件并上传到 OSS。
+   * 直接使用 curl 下载：CDN（365yg / xhscdn）通过 TLS 指纹识别 Node.js fetch 并返回 403，
+   * 而 curl 使用系统 OpenSSL/LibreSSL，TLS 指纹不会被拦截。
+   */
+  async downloadAndUpload(
+    bucketId: string,
+    sourceUrl: string,
+    fileName?: string,
+  ): Promise<{ key: string; ossUrl: string }> {
+    const tmpDir = path.join(os.tmpdir(), 'link-video-downloads');
+    if (!fs.existsSync(tmpDir)) {
+      fs.mkdirSync(tmpDir, { recursive: true });
+    }
+
+    const safeName = fileName || `${uuidv4()}.mp4`;
+    const tmpPath = path.join(tmpDir, safeName);
+
+    try {
+      this.logger.log(`开始下载视频: ${sourceUrl.substring(0, 200)}`);
+
+      await new Promise<void>((resolve, reject) => {
+        execFile('curl', [
+          '-L',               // 跟随重定向
+          '-f',               // HTTP 错误时返回非零退出码
+          '-s', '-S',         // 静默但出错时显示信息
+          '--connect-timeout', '15',
+          '--max-time', '180',
+          '-o', tmpPath,
+          sourceUrl,
+        ], { maxBuffer: 10 * 1024 }, (error, _stdout, stderr) => {
+          if (error) {
+            reject(new Error(`curl 下载失败: ${stderr || error.message}`));
+          } else {
+            resolve();
+          }
+        });
+      });
+
+      const fileSize = fs.statSync(tmpPath).size;
+      if (fileSize === 0) {
+        throw new Error('下载到的文件大小为 0，可能链接已失效');
+      }
+      this.logger.log(`视频已下载: ${tmpPath} (${(fileSize / 1024 / 1024).toFixed(1)}MB)`);
+
+      const result = await this.uploadFile(bucketId, safeName, tmpPath, 'link-videos');
+      this.logger.log(`视频已上传到 OSS: ${result.key}, URL: ${result.ossUrl}`);
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `视频下载上传失败: ${(error as Error).message}\n  源URL: ${sourceUrl.substring(0, 200)}`,
+      );
+      throw error;
+    } finally {
+      if (fs.existsSync(tmpPath)) {
+        fs.unlinkSync(tmpPath);
+      }
+    }
+  }
+
+  /** 获取系统默认 Bucket，用于链接视频等无需用户指定 Bucket 的场景 */
+  async getDefaultBucket(): Promise<{ id: string; name: string } | null> {
+    const bucket = await this.prisma.ossBucket.findFirst({
+      where: { isDefault: true },
+    });
+    return bucket ? { id: bucket.id, name: bucket.name } : null;
   }
 
   async deleteObject(bucketId: string, ossKey: string): Promise<void> {

@@ -10,9 +10,20 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, CheckCircle, XCircle, Loader2, Clock, FileText } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, Loader2, Clock, FileText, StopCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 const VIDEO_STATUS: Record<string, { label: string; icon: React.ReactNode }> = {
   PENDING: { label: '等待中', icon: <Clock className="h-4 w-4 text-muted-foreground" /> },
@@ -58,6 +69,20 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
 
   useTaskSocket(id, { onProgress, onVideoCompleted, onVideoFailed, onTaskCompleted });
 
+  const [stopping, setStopping] = useState(false);
+  const handleStopTask = async () => {
+    setStopping(true);
+    try {
+      await apiClient.delete(`/tasks/${id}`);
+      toast.success('任务已停止');
+      queryClient.invalidateQueries({ queryKey: ['task', id] });
+    } catch (err: any) {
+      toast.error(err?.message || '停止任务失败');
+    } finally {
+      setStopping(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -82,6 +107,28 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
         </Button>
         <h1 className="text-2xl font-bold">{task.name}</h1>
         <Badge>{task.status}</Badge>
+        {['PENDING', 'PROCESSING'].includes(task.status) && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" size="sm" disabled={stopping}>
+                {stopping ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <StopCircle className="mr-1 h-4 w-4" />}
+                停止任务
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>确认停止任务？</AlertDialogTitle>
+                <AlertDialogDescription>
+                  停止后，未完成的视频分析将被标记为失败。已完成的报告不受影响。
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>取消</AlertDialogCancel>
+                <AlertDialogAction onClick={handleStopTask}>确认停止</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </div>
 
       <Card>

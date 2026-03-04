@@ -50,6 +50,7 @@ export class LlmService {
     );
     this.logger.debug(`Request body: ${JSON.stringify(body, null, 2)}`);
 
+    // 视频分析涉及模型处理视频内容，耗时较长，给 5 分钟超时
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
@@ -57,6 +58,7 @@ export class LlmService {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(5 * 60 * 1000),
     });
 
     if (!response.ok) {

@@ -12,6 +12,13 @@ export class OssBucketController {
     private ossService: OssService,
   ) {}
 
+  /** OPERATOR 可用：仅返回 id/name/isDefault，用于创建任务时选择存储 Bucket */
+  @Get('options')
+  @Roles('OPERATOR')
+  findOptions() {
+    return this.service.findOptions();
+  }
+
   @Get()
   findAll() {
     return this.service.findAll();

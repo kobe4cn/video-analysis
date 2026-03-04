@@ -18,6 +18,14 @@ export class OssBucketService {
     private ossService: OssService,
   ) {}
 
+  /** 仅返回 id/name/isDefault，供任务创建时选择 Bucket */
+  async findOptions() {
+    return this.prisma.ossBucket.findMany({
+      select: { id: true, name: true, isDefault: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async findAll() {
     const buckets = await this.prisma.ossBucket.findMany({
       include: {
