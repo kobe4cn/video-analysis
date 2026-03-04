@@ -42,7 +42,7 @@ export class DashboardService {
       })),
       recentReports: recentReports.map((r) => ({
         id: r.id,
-        videoTitle: r.video.title,
+        videoTitle: r.video?.title ?? '未知视频',
         version: r.version,
         updatedAt: r.updatedAt.toISOString(),
       })),

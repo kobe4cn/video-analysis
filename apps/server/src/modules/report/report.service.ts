@@ -90,7 +90,7 @@ export class ReportService {
     return {
       id: report.id,
       videoId: report.videoId,
-      videoTitle: report.video.title,
+      videoTitle: report.video?.title ?? '未知视频',
       content: report.content,
       version: report.version,
       createdAt: report.createdAt.toISOString(),
@@ -107,7 +107,7 @@ export class ReportService {
     return {
       id: report.id,
       videoId: report.videoId,
-      videoTitle: report.video.title,
+      videoTitle: report.video?.title ?? '未知视频',
       content: report.content,
       version: report.version,
       createdAt: report.createdAt.toISOString(),
@@ -177,7 +177,7 @@ export class ReportService {
     const task = await this.prisma.$transaction(async (tx) => {
       const t = await tx.task.create({
         data: {
-          name: `修正报告: ${report.video.title}`,
+          name: `修正报告: ${report.video?.title ?? '未知视频'}`,
           skillId,
           modelId,
           createdBy: userId,
@@ -187,7 +187,7 @@ export class ReportService {
       await tx.taskVideo.create({
         data: {
           taskId: t.id,
-          videoId: report.videoId,
+          videoId: report.videoId!,
         },
       });
 

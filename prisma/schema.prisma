@@ -26,6 +26,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   videos       Video[]
+  linkVideos   LinkVideo[]
   tasks        Task[]
   skills       Skill[]
   videoFolders VideoFolder[]
@@ -113,6 +114,28 @@ model Video {
   updatedAt  DateTime     @updatedAt
 }
 
+model LinkVideo {
+  id             String          @id @default(cuid())
+  url            String
+  platform       Platform
+  title          String?
+  author         String?
+  videoFileUrl   String?
+  coverUrl       String?
+  likes          Int?
+  collects       Int?
+  comments       Int?
+  shares         Int?
+  status         LinkVideoStatus @default(PENDING)
+  error          String?
+  createdBy      String
+  user           User            @relation(fields: [createdBy], references: [id])
+  taskLinkVideos TaskLinkVideo[]
+  reports        Report[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
 // ========== 解析任务管理 ==========
 
 enum TaskStatus {
@@ -130,22 +153,42 @@ enum TaskVideoStatus {
   FAILED
 }
 
+enum TaskType {
+  VIDEO
+  LINK
+}
+
+enum Platform {
+  XIAOHONGSHU
+  DOUYIN
+}
+
+enum LinkVideoStatus {
+  PENDING
+  SCRAPING
+  ANALYZING
+  COMPLETED
+  FAILED
+}
+
 model Task {
-  id          String     @id @default(cuid())
-  name        String
-  status      TaskStatus @default(PENDING)
-  skillId     String
-  skill       Skill      @relation(fields: [skillId], references: [id])
-  modelId     String
-  model       Model      @relation(fields: [modelId], references: [id])
-  createdBy   String
-  user        User       @relation(fields: [createdBy], references: [id])
-  taskVideos  TaskVideo[]
-  progress    Int        @default(0)
-  startedAt   DateTime?
-  completedAt DateTime?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id             String          @id @default(cuid())
+  name           String
+  type           TaskType        @default(VIDEO)
+  status         TaskStatus      @default(PENDING)
+  skillId        String
+  skill          Skill           @relation(fields: [skillId], references: [id])
+  modelId        String
+  model          Model           @relation(fields: [modelId], references: [id])
+  createdBy      String
+  user           User            @relation(fields: [createdBy], references: [id])
+  taskVideos     TaskVideo[]
+  taskLinkVideos TaskLinkVideo[]
+  progress       Int             @default(0)
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 }
 
 model TaskVideo {
@@ -162,18 +205,35 @@ model TaskVideo {
   completedAt DateTime?
 }
 
+model TaskLinkVideo {
+  id          String          @id @default(cuid())
+  taskId      String
+  task        Task            @relation(fields: [taskId], references: [id])
+  linkVideoId String
+  linkVideo   LinkVideo       @relation(fields: [linkVideoId], references: [id])
+  status      TaskVideoStatus @default(PENDING)
+  reportId    String?         @unique
+  report      Report?         @relation(fields: [reportId], references: [id])
+  error       String?
+  startedAt   DateTime?
+  completedAt DateTime?
+}
+
 // ========== 报告与版本管理 ==========
 
 model Report {
-  id         String          @id @default(cuid())
-  videoId    String
-  video      Video           @relation(fields: [videoId], references: [id])
-  content    String
-  version    Int             @default(1)
-  versions   ReportVersion[]
-  taskVideo  TaskVideo?
-  createdAt  DateTime        @default(now())
-  updatedAt  DateTime        @updatedAt
+  id            String          @id @default(cuid())
+  videoId       String?
+  video         Video?          @relation(fields: [videoId], references: [id])
+  linkVideoId   String?
+  linkVideo     LinkVideo?      @relation(fields: [linkVideoId], references: [id])
+  content       String
+  version       Int             @default(1)
+  versions      ReportVersion[]
+  taskVideo     TaskVideo?
+  taskLinkVideo TaskLinkVideo?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
 }
 
 model ReportVersion {
