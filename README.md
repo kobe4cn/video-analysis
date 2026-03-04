@@ -1,6 +1,6 @@
 # 视频分析平台
 
-基于 AI 大模型的视频内容分析平台，支持批量上传视频至阿里云 OSS，通过 GLM 多模态模型自动分析视频内容，生成结构化的分析报告。
+基于 AI 大模型的视频内容分析平台，支持**本地视频上传**和**小红书/抖音链接解析**两种方式，通过 GLM 多模态模型自动分析视频内容，生成结构化的分析报告。
 
 ## 技术栈
 
@@ -15,6 +15,7 @@
 | **AI** | 智谱 GLM 系列多模态模型 |
 | **实时通信** | Socket.io (WebSocket) |
 | **认证** | JWT 双令牌 (Access + Refresh) |
+| **爬虫** | Playwright (Chromium headless) |
 
 ## 项目结构
 
@@ -25,11 +26,13 @@ xiaohongshuvideo/
 │   │   └── src/modules/
 │   │       ├── auth/        # 认证 & 授权（JWT、角色守卫）
 │   │       ├── user/        # 用户管理
-│   │       ├── video/       # 视频上传 & 管理
+│   │       ├── video/       # 视频上传 & 文件夹管理
+│   │       ├── link-video/  # 链接视频管理（小红书/抖音）
 │   │       ├── storage/     # 阿里云 OSS 配置 & Bucket 管理
 │   │       ├── model/       # AI 模型 & Provider 管理
 │   │       ├── skill/       # 分析 Prompt 模板（版本管理）
 │   │       ├── task/        # 解析任务调度（Bull 队列）
+│   │       ├── scraper/     # Playwright 爬虫（平台数据抓取 + 视频 URL 提取）
 │   │       ├── llm/         # GLM API 调用
 │   │       ├── report/      # 分析报告（版本管理）
 │   │       ├── notification/# WebSocket 实时通知
@@ -120,19 +123,34 @@ pnpm dev
 ### 视频管理
 
 - 支持多视频同时上传，通过后端中转写入阿里云 OSS
+- 文件夹分组管理，支持按客户/品牌分类
 - 选择目标 Bucket，支持中文文件名
 - 视频列表搜索、分页
 
+### 链接视频解析（v0.2 新增）
+
+- 粘贴小红书/抖音视频链接，自动识别平台
+- 支持批量链接（逗号分隔），一次创建多个解析任务
+- 通过 Playwright 无头浏览器自动抓取平台互动数据（标题、博主、点赞、收藏、评论、分享）
+- 通过 kukutool 第三方服务提取视频 MP4 直链
+- 使用 curl 下载视频并持久化到阿里云 OSS
+- 平台互动数据与视频内容一起传递给 AI 模型，生成综合分析报告
+
 ### 解析任务
 
-- 选择视频 + Skill + AI 模型，创建批量分析任务
+- 两种任务模式：**本地视频任务**（选择已上传视频）和**链接任务**（粘贴 URL）
+- 选择 Skill + AI 模型，创建批量分析任务
 - Bull 队列异步处理，逐视频分析，单个失败不阻塞其他
 - WebSocket 实时推送任务进度
+- 支持手动停止进行中的任务
+- 服务重启时自动清理遗留的孤儿任务
 - 任务状态：PENDING → PROCESSING → COMPLETED / PARTIAL / FAILED
+- 超时保护：Bull job 超时（10/15 分钟）、LLM API 超时（5 分钟）
 
 ### AI 分析
 
 - 通过 GLM 多模态模型理解视频内容
+- 链接视频分析时自动附带平台互动数据作为参考
 - Skill 模块管理分析 Prompt 模板，支持版本管理
 - 分析结果生成 Markdown 格式的结构化报告
 
@@ -147,6 +165,7 @@ pnpm dev
 - 管理阿里云 OSS 配置（AK/SK、Region）
 - 创建 / 关联 / 删除 Bucket，真实操作阿里云
 - 支持查看阿里云远程 Bucket 并一键关联
+- Bucket CORS 自动配置
 
 ### 模型管理（Admin）
 
@@ -165,6 +184,7 @@ pnpm dev
 | 仪表盘（全部指标） | ✅ | ✅ | - |
 | 仪表盘（基础指标） | ✅ | ✅ | ✅ |
 | 视频上传 & 管理 | ✅ | ✅ | ✅ |
+| 链接视频解析 | ✅ | ✅ | - |
 | 创建解析任务 | ✅ | ✅ | - |
 | Skills 管理 | ✅ | ✅ | - |
 | 查看报告 | ✅ | ✅ | ✅ |
@@ -195,15 +215,10 @@ pnpm db:seed                  # 填充初始数据
 
 ## 任务处理流程
 
+### 本地视频任务
+
 ```
-用户创建任务
-    │
-    ▼
-┌─────────────────────────────┐
-│  Prisma 事务                │
-│  ① 创建 Task 记录           │
-│  ② 创建 TaskVideo 关联记录  │
-└─────────────────────────────┘
+用户选择已上传视频 + Skill + 模型 → 创建任务
     │
     ▼
 Bull Queue 入队 ──────────────── 控制器立即返回
@@ -219,19 +234,68 @@ TaskProcessor 消费
 更新 Task 最终状态（COMPLETED / PARTIAL / FAILED）
 ```
 
+### 链接视频任务
+
+```
+用户粘贴视频链接 + Skill + 模型 → 创建任务
+    │
+    ▼
+Bull Queue 入队 ──────────────── 控制器立即返回
+    │
+    ▼
+LinkTaskProcessor 消费（每条链接依次处理）
+    │
+    ├──▶ 阶段 1: Playwright 抓取平台互动数据（点赞/收藏/评论/分享）
+    │        ↓ 伪装浏览器上下文（隐藏 webdriver、模拟真实 UA）
+    │
+    ├──▶ 阶段 2: kukutool 提取视频 MP4 直链
+    │        ↓ 自动关闭广告弹窗、填入链接、解析
+    │
+    ├──▶ 阶段 3: curl 下载视频 → 上传 OSS 持久化
+    │        ↓ 绕过 CDN TLS 指纹拦截
+    │
+    ├──▶ 阶段 4: LLM 分析（视频内容 + 平台互动数据）
+    │        ↓ GLM 多模态模型
+    │
+    └──▶ 生成 Report ──▶ WebSocket 通知
+    │
+    ▼
+更新 Task 最终状态（COMPLETED / PARTIAL / FAILED）
+```
+
 ## 数据模型
 
 ```
 User ──────────┬──▶ Video ◀── OssBucket ◀── OssConfig
+               │      │            │
+               │      ├──▶ Report  │
+               │      │      ▲     │
+               ├──▶ Task     │     │
+               │      │      │     │
+               │      ├──▶ TaskVideo ──┘
                │      │
-               │      ├──▶ Report ──▶ ReportVersion
-               │      │
-               ├──▶ Task ──▶ TaskVideo ──┘
+               │      ├──▶ TaskLinkVideo
+               │      │         │
+               │      │         ▼
+               ├──▶ LinkVideo ──▶ Report
                │      │
                │      ├──▶ Model ◀── ModelProvider
                │      │
-               └──▶ Skill ──▶ SkillVersion
+               ├──▶ Skill ──▶ SkillVersion
+               │
+               └──▶ VideoFolder ──▶ Video
 ```
+
+### 关键模型说明
+
+| 模型 | 说明 |
+|------|------|
+| **Video** | 本地上传的视频文件，存储于 OSS |
+| **LinkVideo** | 通过链接解析的视频，记录原始 URL、平台、互动数据 |
+| **Task** | 分析任务，类型为 VIDEO（本地）或 LINK（链接） |
+| **TaskVideo** | 本地视频任务的子项，关联 Video → Report |
+| **TaskLinkVideo** | 链接视频任务的子项，关联 LinkVideo → Report |
+| **VideoFolder** | 视频文件夹，按客户/品牌分组管理 |
 
 ## 部署指南
 
@@ -489,3 +553,10 @@ push to main
 | `CORS_ORIGIN` | 否 | `http://localhost:3000` | 允许的 CORS 来源 |
 | `PORT` | 否 | `3001` | 后端监听端口 |
 | `NEXT_PUBLIC_API_URL` | 否 | `http://localhost:3001/api` | 前端 API 地址（构建时注入） |
+
+## 版本历史
+
+| 版本 | 说明 |
+|------|------|
+| **v0.2-link-video-analysis** | 链接视频解析：小红书/抖音链接自动抓取、视频下载、AI 分析；任务停止、超时保护、孤儿任务清理 |
+| **v0.1** | 基础功能：本地视频上传、OSS 存储、GLM 分析、报告生成、用户角色权限 |
