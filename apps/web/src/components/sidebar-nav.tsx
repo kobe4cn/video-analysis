@@ -11,6 +11,7 @@ import {
   Users,
   Database,
   Bot,
+  Link2,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -34,6 +35,7 @@ interface NavItem {
 const mainNav: NavItem[] = [
   { title: '仪表盘', href: '/dashboard', icon: LayoutDashboard, minRole: 'USER' },
   { title: '视频管理', href: '/dashboard/videos', icon: Video, minRole: 'USER' },
+  { title: '链接视频', href: '/dashboard/link-videos', icon: Link2, minRole: 'OPERATOR' },
   { title: '解析任务', href: '/dashboard/tasks', icon: ListTodo, minRole: 'OPERATOR' },
   { title: 'Skills 管理', href: '/dashboard/skills', icon: Sparkles, minRole: 'OPERATOR' },
 ];

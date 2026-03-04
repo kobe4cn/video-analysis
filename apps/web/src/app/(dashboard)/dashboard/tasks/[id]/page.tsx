@@ -122,46 +122,92 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
           <CardTitle>视频处理状态</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>视频</TableHead>
-                <TableHead>状态</TableHead>
-                <TableHead>报告</TableHead>
-                <TableHead>错误</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {task.videos?.map((v: any) => {
-                const statusInfo = VIDEO_STATUS[v.status] || VIDEO_STATUS.PENDING;
-                return (
-                  <TableRow key={v.id}>
-                    <TableCell>{v.videoTitle}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {statusInfo.icon}
-                        <span>{statusInfo.label}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {v.reportId ? (
-                        <Button variant="ghost" size="sm" asChild>
-                          <Link href={`/dashboard/reports/${v.reportId}`}>
-                            <FileText className="mr-1 h-4 w-4" />查看报告
-                          </Link>
-                        </Button>
-                      ) : (
-                        '-'
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm text-destructive max-w-xs truncate">
-                      {v.error || '-'}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+          {task.type === 'LINK' ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>链接</TableHead>
+                  <TableHead>平台</TableHead>
+                  <TableHead>状态</TableHead>
+                  <TableHead className="text-right">点赞</TableHead>
+                  <TableHead>报告</TableHead>
+                  <TableHead>错误</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {task.linkVideos?.map((lv: any) => {
+                  const statusInfo = VIDEO_STATUS[lv.status] || VIDEO_STATUS.PENDING;
+                  return (
+                    <TableRow key={lv.id}>
+                      <TableCell className="max-w-xs">
+                        <div className="truncate font-medium">{lv.title || '未获取'}</div>
+                        <div className="text-xs text-muted-foreground truncate">{lv.url}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {lv.platform === 'XIAOHONGSHU' ? '小红书' : '抖音'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {statusInfo.icon}
+                          <span>{statusInfo.label}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">{lv.likes ?? '-'}</TableCell>
+                      <TableCell>
+                        {lv.reportId ? (
+                          <Button variant="ghost" size="sm" asChild>
+                            <Link href={`/dashboard/reports/${lv.reportId}`}>
+                              <FileText className="mr-1 h-4 w-4" />查看报告
+                            </Link>
+                          </Button>
+                        ) : '-'}
+                      </TableCell>
+                      <TableCell className="text-sm text-destructive max-w-xs truncate">{lv.error || '-'}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>视频</TableHead>
+                  <TableHead>状态</TableHead>
+                  <TableHead>报告</TableHead>
+                  <TableHead>错误</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {task.videos?.map((v: any) => {
+                  const statusInfo = VIDEO_STATUS[v.status] || VIDEO_STATUS.PENDING;
+                  return (
+                    <TableRow key={v.id}>
+                      <TableCell>{v.videoTitle}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {statusInfo.icon}
+                          <span>{statusInfo.label}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {v.reportId ? (
+                          <Button variant="ghost" size="sm" asChild>
+                            <Link href={`/dashboard/reports/${v.reportId}`}>
+                              <FileText className="mr-1 h-4 w-4" />查看报告
+                            </Link>
+                          </Button>
+                        ) : '-'}
+                      </TableCell>
+                      <TableCell className="text-sm text-destructive max-w-xs truncate">{v.error || '-'}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

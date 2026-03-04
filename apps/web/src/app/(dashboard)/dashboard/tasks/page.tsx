@@ -83,7 +83,10 @@ export default function TasksPage() {
                 const statusInfo = STATUS_MAP[task.status] || { label: task.status, variant: 'secondary' as const };
                 return (
                   <TableRow key={task.id}>
-                    <TableCell className="font-medium">{task.name}</TableCell>
+                    <TableCell className="font-medium">
+                      {task.name}
+                      {task.type === 'LINK' && <Badge variant="outline" className="ml-2 text-xs">链接</Badge>}
+                    </TableCell>
                     <TableCell>
                       <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
                     </TableCell>
