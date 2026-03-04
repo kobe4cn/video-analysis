@@ -78,6 +78,61 @@ export class ReportService {
     return { id: updated.id, version: updated.version };
   }
 
+  /** 为链接视频创建或更新报告 */
+  async createOrUpdateLinkVideoReport(params: {
+    linkVideoId: string;
+    content: string;
+    skillId?: string;
+    modelId?: string;
+  }): Promise<{ id: string; version: number }> {
+    const existing = await this.prisma.report.findFirst({
+      where: { linkVideoId: params.linkVideoId },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    if (!existing) {
+      const report = await this.prisma.$transaction(async (tx) => {
+        const newReport = await tx.report.create({
+          data: {
+            linkVideoId: params.linkVideoId,
+            content: params.content,
+            version: 1,
+          },
+        });
+        await tx.reportVersion.create({
+          data: {
+            reportId: newReport.id,
+            version: 1,
+            content: params.content,
+            skillId: params.skillId,
+            modelId: params.modelId,
+          },
+        });
+        return newReport;
+      });
+      return { id: report.id, version: report.version };
+    }
+
+    // 已有报告：先归档当前内容为历史版本，再用新内容覆盖主体
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.reportVersion.create({
+        data: {
+          reportId: existing.id,
+          version: existing.version,
+          content: existing.content,
+          skillId: params.skillId,
+          modelId: params.modelId,
+        },
+      });
+      const updatedReport = await tx.report.update({
+        where: { id: existing.id },
+        data: { content: params.content, version: existing.version + 1 },
+      });
+      return updatedReport;
+    });
+    return { id: updated.id, version: updated.version };
+  }
+
   async findByVideoId(videoId: string) {
     const report = await this.prisma.report.findFirst({
       where: { videoId },

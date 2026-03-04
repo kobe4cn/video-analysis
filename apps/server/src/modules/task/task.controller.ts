@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Delete, Param, Body, Query } from '@nestjs/common';
 import { TaskService } from './task.service';
 import { CreateTaskDto } from './dto/create-task.dto';
+import { CreateLinkTaskDto } from './dto/create-link-task.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
@@ -12,6 +13,11 @@ export class TaskController {
   @Post()
   create(@Body() dto: CreateTaskDto, @CurrentUser('id') userId: string) {
     return this.taskService.create(dto, userId);
+  }
+
+  @Post('link')
+  createLink(@Body() dto: CreateLinkTaskDto, @CurrentUser('id') userId: string) {
+    return this.taskService.createLinkTask(dto, userId);
   }
 
   @Get()
